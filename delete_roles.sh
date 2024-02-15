@@ -2,7 +2,7 @@
 #
 # Delete IAM roles
 #
-# Usage: delete_roles.sh [-h] [FILE ...]
+# usage: ${PROGNAME} [-h] [-aciv] [-o OUTPUT] [-p PROFILE] [FILE ...]
 
 PROGNAME="${0##*/}"
 OPTSTR=":hacivo:p:"
