@@ -270,7 +270,7 @@ delete_roles()
         then
             >&2 echo
         fi
-        read -r line
+        read -r -u 4 line
     do
         if ((verbose))
         then
@@ -317,7 +317,7 @@ delete_roles()
             continue
         fi
 
-        if ((confirm_deletion)) && ! confirm "Delete role ${role}?" <&3
+        if ((confirm_deletion)) && ! confirm "Delete role ${role}?"
         then
             continue
         fi
@@ -334,7 +334,7 @@ delete_roles()
             printf 'Deleted role %s\n' "${role}"
         fi
 
-    done
+    done 4<&0 0<&3
 } 3<&0
 
 
