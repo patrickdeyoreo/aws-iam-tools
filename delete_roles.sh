@@ -315,9 +315,9 @@ delete_roles()
             delete_role "${role}"
         }
         then
-            printf 'Deleted %s\n' "${line}"
+            printf 'Deleted %s\n' "${role}"
         else
-            printf 'Failed to delete %s\n' "${line}"
+            printf 'Failed to delete %s\n' "${role}"
         fi
 
     done 3< <(cat -- "$@")
