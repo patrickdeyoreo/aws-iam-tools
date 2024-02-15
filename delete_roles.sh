@@ -290,6 +290,7 @@ delete_roles()
         if ! role_exists "${role}"
         then
             >&2 printf '* Role %s does not exist - skipping\n' "${role}"
+            continue
         fi
 
         if ((confirm_deletion)) && ! confirm "Delete role ${role}?"
