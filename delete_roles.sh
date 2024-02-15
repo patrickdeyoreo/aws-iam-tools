@@ -236,7 +236,7 @@ role_exists()
     then
         >&2 printf '==> Checking if role %s exists\n' "$1"
     fi
-    if ! "${aws_cmd[@]}" delete-role --role-name "$1" 1> /dev/null 2>&1
+    if ! "${aws_cmd[@]}" get-role --role-name "$1" 1> /dev/null 2>&1
     then
         return 1
     fi
