@@ -236,13 +236,13 @@ role_exists()
     then
         >&2 printf '==> Checking if role %s exists\n' "$1"
     fi
-    if ! "${aws_cmd[@]}" get-role --role-name "$1" 1> /dev/null 2>&1
+    if "${aws_cmd[@]}" get-role --role-name "$1" 1> /dev/null 2>&1
     then
-        return 1
+        return 0
     fi
-    return 0
-
+    return 1
 }
+
 
 ################
 # Delete roles read line-by-line from files
@@ -287,9 +287,14 @@ delete_roles()
                 ;;
         esac
 
-        if ((confirm_deletion))
+        if ! role_exists "${role}"
         then
-            confirm "Delete role ${role}?" || continue
+            >&2 printf '* Role %s does not exist - skipping\n' "${role}"
+        fi
+
+        if ((confirm_deletion)) && ! confirm "Delete role ${role}?"
+        then
+            continue
         fi
 
         >&2 printf '> Operating on role %s\n' "${role}"
