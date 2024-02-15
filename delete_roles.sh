@@ -81,7 +81,7 @@ parse_opts()
                 aws_cmd=("${aws_cmd[@]}" "--profile" "${profile}")
                 ;;
             "v")
-                verbose=1
+                verbose+=1
                 ;;
             "?")
                 >&2 printf '%s: -%s: unrecognized option\n' "${PROGNAME}" "${OPTARG}"
@@ -134,7 +134,7 @@ remove_role_from_instance_profiles()
         then
             >&2 printf '==> Removing role from instance profile %s\n' "${instance_profile}"
         fi
-        if ! "${aws_cmd[@]}" iam remove-role-from-instance-profile --instance-profile-name "${instance_profile}" --role-name "$1"
+        if ! "${aws_cmd[@]}" iam remove-role-from-instance-profile --instance-profile-name "${instance_profile}" --role-name "$1" > /dev/null
         then
             >&2 printf '*** Failed to remove role from instance profile %s\n' "${instance_profile}"
             return 1
@@ -149,7 +149,7 @@ remove_role_from_instance_profiles()
         then
             >&2 printf '==> Deleting instance profile %s\n' "${instance_profile}"
         fi
-        if ! "${aws_cmd[@]}" iam delete-instance-profile --instance-profile-name "${instance_profile}"
+        if ! "${aws_cmd[@]}" iam delete-instance-profile --instance-profile-name "${instance_profile}" > /dev/null
         then
             >&2 printf '*** Failed to delete instance profile %s\n' "${instance_profile}"
         fi
@@ -157,6 +157,7 @@ remove_role_from_instance_profiles()
         "${aws_cmd[@]}" iam list-instance-profiles-for-role --role-name "$1" --query 'InstanceProfiles[*].InstanceProfileName' |
         jq --raw-output --compact-output '.[]'
     )
+    return 0
 }
 
 
@@ -173,7 +174,7 @@ delete_inline_role_policies()
         then
             >&2 printf '==> Deleting inline role policy %s\n' "${policy}"
         fi
-        if ! "${aws_cmd[@]}" iam delete-role-policy --role-name "$1" --policy-name "${policy}"
+        if ! "${aws_cmd[@]}" iam delete-role-policy --role-name "$1" --policy-name "${policy}" > /dev/null
         then
             >&2 printf '*** Failed to delete inline role policy %s\n' "${policy}"
             return 1
@@ -182,6 +183,7 @@ delete_inline_role_policies()
         "${aws_cmd[@]}" iam list-role-policies --role-name "$1" --query 'PolicyNames' |
         jq --raw-output --compact-output '.[]'
     )
+    return 0
 }
 
 
@@ -198,7 +200,7 @@ detach_managed_role_policies()
         then
             >&2 printf '==> Detaching managed policy %s\n' "${policy}"
         fi
-        if ! "${aws_cmd[@]}" iam detach-role-policy --role-name "$1" --policy-arn "${policy}"
+        if ! "${aws_cmd[@]}" iam detach-role-policy --role-name "$1" --policy-arn "${policy}" > /dev/null
         then
             >&2 printf '*** Failed to detach managed policy %s\n' "${policy}"
             return 1
@@ -207,6 +209,7 @@ detach_managed_role_policies()
         "${aws_cmd[@]}" iam list-attached-role-policies --role-name "$1" --query 'AttachedPolicies[*].PolicyArn' |
         jq --raw-output --compact-output '.[]'
     )
+    return 0
 }
 
 
@@ -219,11 +222,12 @@ delete_role()
     then
         >&2 printf '==> Deleting role %s\n' "$1"
     fi
-    if ! "${aws_cmd[@]}" delete-role --role-name "$1"
+    if ! "${aws_cmd[@]}" iam delete-role --role-name "$1" > /dev/null
     then
         >&2 printf '*** Failed to delete role %s\n' "$1"
         return 1
     fi
+    return 0
 }
 
 
@@ -236,11 +240,11 @@ role_exists()
     then
         >&2 printf '==> Checking if role %s exists\n' "$1"
     fi
-    if "${aws_cmd[@]}" get-role --role-name "$1" 1> /dev/null 2>&1
+    if ! "${aws_cmd[@]}" iam get-role --role-name "$1" > /dev/null 2>&1
     then
-        return 0
+        return 1
     fi
-    return 1
+    return 0
 }
 
 
@@ -256,9 +260,13 @@ delete_roles()
     # Iterate over all policies
     while read -r -u 3 line
     do
+        if ((verbose))
+        then
+            >&2 printf '> %s\n' "${line}"
+        fi
         case "${line}" in
             arn:aws:iam::*:role/*)
-                role="${role#arn:aws:iam::*:role/}"
+                role="${line#arn:aws:iam::*:role/}"
                 ;;
             arn:aws:*:*:*:*)
                 >&2 printf '* ARN %s does not refer to an IAM role - skipping\n' "${line}"
@@ -338,5 +346,7 @@ main()
     return 0
 }
 
+
+trap 'echo >&2; exit' SIGINT
 
 main "$@"
