@@ -2,10 +2,10 @@
 #
 # Delete IAM roles
 #
-# usage: ${PROGNAME} [-h] [-aciv] [-o OUTPUT] [-p PROFILE] [FILE ...]
+# usage: ${PROGNAME} [-h] [-aciv] [-o OUTPUT] [-p PROFILE] [-x PATTERN] [FILE ...]
 
 PROGNAME="${0##*/}"
-OPTSTR=":hacivo:p:"
+OPTSTR=":hacivo:p:x:"
 
 
 ################
@@ -20,7 +20,7 @@ help()
         head -n 1
     fi
 } << EOF
-usage: ${PROGNAME} [-h] [-aciv] [-o OUTPUT] [-p PROFILE] [FILE ...]
+usage: ${PROGNAME} [-h] [-aciv] [-o OUTPUT] [-p PROFILE] [-x PATTERN] [FILE ...]
 
 Delete IAM roles, reading role names or ARNs line-by-line.
 
@@ -34,6 +34,7 @@ optional arguments:
   -o OUTPUT     Output filename
   -p PROFILE    AWS CLI profile name
   -v            Show each action being taken (verbose)
+  -x PATTERN    Exclude role names matching pattern (extended regexp, like egrep)
   -h            Show this help message and exit
 EOF
 
@@ -82,6 +83,9 @@ parse_opts()
                 ;;
             "v")
                 verbose+=1
+                ;;
+            "x")
+                grep_regexps+=(-e "${OPTARG}")
                 ;;
             "?")
                 >&2 printf '%s: -%s: unrecognized option\n' "${PROGNAME}" "${OPTARG}"
@@ -152,6 +156,8 @@ remove_role_from_instance_profiles()
         if ! "${aws_cmd[@]}" iam delete-instance-profile --instance-profile-name "${instance_profile}" > /dev/null
         then
             >&2 printf '*** Failed to delete instance profile %s\n' "${instance_profile}"
+        else
+            printf 'Deleted instance profile %s\n' "${instance_profile}"
         fi
     done < <(
         "${aws_cmd[@]}" iam list-instance-profiles-for-role --role-name "$1" --query 'InstanceProfiles[*].InstanceProfileName' |
@@ -253,12 +259,18 @@ role_exists()
 ################
 delete_roles()
 {
-    local line
+    local line=""
     local role
     local role_path
 
     # Iterate over all policies
-    while read -r -u 3 line
+    cat -- "$@" |
+    while
+        if test -n "${line}"
+        then
+            >&2 echo
+        fi
+        read -r line
     do
         if ((verbose))
         then
@@ -294,14 +306,18 @@ delete_roles()
                 fi
                 ;;
         esac
-
+        if ((${#grep_regexps[@]})) && grep --extended-regexp --line-regexp "${grep_regexps[@]}" <<< "${role}"
+        then
+            >&2 printf '* Role %s matches an exclude-pattern - skipping\n' "${role}"
+            continue
+        fi
         if ! role_exists "${role}"
         then
             >&2 printf '* Role %s does not exist - skipping\n' "${role}"
             continue
         fi
 
-        if ((confirm_deletion)) && ! confirm "Delete role ${role}?"
+        if ((confirm_deletion)) && ! confirm "Delete role ${role}?" <&3
         then
             continue
         fi
@@ -315,13 +331,11 @@ delete_roles()
             delete_role "${role}"
         }
         then
-            printf 'Deleted %s\n' "${role}"
-        else
-            printf 'Failed to delete %s\n' "${role}"
+            printf 'Deleted role %s\n' "${role}"
         fi
 
-    done 3< <(cat -- "$@")
-}
+    done
+} 3<&0
 
 
 ################
@@ -335,18 +349,19 @@ main()
     local -i confirm_deletion=0
     local -i delete_instance_profiles=0
     local -i verbose=0
+    local grep_regexps=()
 
     parse_opts "$@"
     shift "$((OPTIND - 1))"
 
-    >&2 printf '* Using AWS CLI profile %s\n' "${profile}"
+    if ((verbose))
+    then
+        >&2 printf '* Using AWS CLI profile %s\n' "${profile}"
+    fi
 
     delete_roles "$@"
 
     return 0
 }
-
-
-trap 'echo >&2; exit' SIGINT
 
 main "$@"
