@@ -178,7 +178,7 @@ delete_inline_role_policies()
             >&2 printf '*** Failed to delete inline role policy %s\n' "${policy}"
             return 1
         fi
-    done <(
+    done < <(
         "${aws_cmd[@]}" iam list-role-policies --role-name "$1" --query 'PolicyNames' |
         jq --raw-output --compact-output '.[]'
     )
@@ -203,7 +203,7 @@ detach_managed_role_policies()
             >&2 printf '*** Failed to detach managed policy %s\n' "${policy}"
             return 1
         fi
-    done <(
+    done < <(
         "${aws_cmd[@]}" iam list-attached-role-policies --role-name "$1" --query 'AttachedPolicies[*].PolicyArn' |
         jq --raw-output --compact-output '.[]'
     )
@@ -280,6 +280,7 @@ delete_roles()
         case "${role_path}" in
             aws-*)
                 if ! ((delete_aws_roles))
+                then
                     >&2 printf '* Role %s is an AWS-managed role - skipping\n' "${role}"
                     continue
                 fi
