@@ -20,7 +20,7 @@ help()
         head -n 1
     fi
 } << EOF
-usage: ${PROGNAME} [-h] [-aciv] [-o OUTPUT] [-p PROFILE] [-x PATTERN] [FILE ...]
+usage: ${PROGNAME} [-h] [-acinv] [-o OUTPUT] [-p PROFILE] [-x PATTERN] [FILE ...]
 
 Delete IAM roles, reading role names or ARNs line-by-line.
 
