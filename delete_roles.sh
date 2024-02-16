@@ -2,10 +2,10 @@
 #
 # Delete IAM roles
 #
-# usage: ${PROGNAME} [-h] [-aciv] [-o OUTPUT] [-p PROFILE] [-x PATTERN] [FILE ...]
+# usage: ${PROGNAME} [-h] [-acinv] [-o OUTPUT] [-p PROFILE] [-x PATTERN] [FILE ...]
 
 PROGNAME="${0##*/}"
-OPTSTR=":hacivo:p:x:"
+OPTSTR=":hacinvo:p:x:"
 
 
 ################
@@ -31,6 +31,7 @@ optional arguments:
   -a            Delete AWS-managed roles (*DANGEROUS*)
   -c            Confirm before deleting
   -i            Delete instance profiles after detaching roles
+  -n            Do not do anything - only show roles which would be operated on
   -o OUTPUT     Output filename
   -p PROFILE    AWS CLI profile name
   -v            Show each action being taken (verbose)
@@ -73,18 +74,20 @@ parse_opts()
             "i")
                 delete_instance_profiles=1
                 ;;
+            "n")
+                do_not_delete=1
+                ;;
             "o")
                 exec 1>|"${OPTARG}"
                 ;;
             "p")
-                profile="${OPTARG}"
-                aws_cmd=("${aws_cmd[@]}" "--profile" "${profile}")
+                aws_cmd+=("--profile" "${profile}")
                 ;;
             "v")
                 verbose+=1
                 ;;
             "x")
-                grep_regexps=("${grep_regexps[@]}" "-e" "${OPTARG}")
+                regexps+=("-e" "${OPTARG}")
                 ;;
             "?")
                 >&2 printf '%s: -%s: unrecognized option\n' "${PROGNAME}" "${OPTARG}"
@@ -132,7 +135,7 @@ remove_role_from_instance_profiles()
 {
     local instance_profile
 
-    while read -r instance_profile
+    while read -r -u 3 instance_profile
     do
         if ((verbose))
         then
@@ -143,11 +146,18 @@ remove_role_from_instance_profiles()
             >&2 printf '*** Failed to remove role from instance profile %s\n' "${instance_profile}"
             return 1
         fi
-        if ! ((delete_instance_profiles))
+        printf 'Removed role from instance profile %s\n' "${instance_profile}"
+
+        if ! ((delete_instance_profiles)) && ((verbose))
         then
-            printf 'Skipped deletion of instance profile %s\n' "${instance_profile}"
+            >&2 printf '==> Skipping deletion of instance profile %s\n' "${instance_profile}"
             continue
         fi
+        if ! ((delete_instance_profiles))
+        then
+            continue
+        fi
+
         if ((verbose))
         then
             >&2 printf '==> Deleting instance profile %s\n' "${instance_profile}"
@@ -155,10 +165,11 @@ remove_role_from_instance_profiles()
         if ! "${aws_cmd[@]}" iam delete-instance-profile --instance-profile-name "${instance_profile}" > /dev/null
         then
             >&2 printf '*** Failed to delete instance profile %s\n' "${instance_profile}"
-        else
-            printf 'Deleted instance profile %s\n' "${instance_profile}"
+            continue
         fi
-    done < <(
+        printf 'Deleted instance profile %s\n' "${instance_profile}"
+
+    done 3< <(
         "${aws_cmd[@]}" iam list-instance-profiles-for-role --role-name "$1" --query 'InstanceProfiles[*].InstanceProfileName' |
         jq --raw-output --compact-output '.[]'
     )
@@ -173,7 +184,7 @@ delete_inline_role_policies()
 {
     local policy
 
-    while read -r policy
+    while read -r -u 3 policy
     do
         if ((verbose))
         then
@@ -181,10 +192,12 @@ delete_inline_role_policies()
         fi
         if ! "${aws_cmd[@]}" iam delete-role-policy --role-name "$1" --policy-name "${policy}" > /dev/null
         then
-            >&2 printf '*** Failed to delete inline role policy %s\n' "${policy}"
+            >&2 printf '*** Failed to delete inline policy %s\n' "${policy}"
             return 1
         fi
-    done < <(
+        printf 'Deleted inline policy %s\n' "${policy}"
+
+    done 3< <(
         "${aws_cmd[@]}" iam list-role-policies --role-name "$1" --query 'PolicyNames' |
         jq --raw-output --compact-output '.[]'
     )
@@ -199,7 +212,7 @@ detach_managed_role_policies()
 {
     local policy
 
-    while read -r policy
+    while read -r -u 3 policy
     do
         if ((verbose))
         then
@@ -210,7 +223,9 @@ detach_managed_role_policies()
             >&2 printf '*** Failed to detach managed policy %s\n' "${policy}"
             return 1
         fi
-    done < <(
+        printf 'Detached managed policy %s\n' "${policy}"
+
+    done 3< <(
         "${aws_cmd[@]}" iam list-attached-role-policies --role-name "$1" --query 'AttachedPolicies[*].PolicyArn' |
         jq --raw-output --compact-output '.[]'
     )
@@ -232,6 +247,7 @@ delete_role()
         >&2 printf '*** Failed to delete role %s\n' "$1"
         return 1
     fi
+    printf 'Deleted role %s\n' "${role}"
     return 0
 }
 
@@ -263,7 +279,6 @@ delete_roles()
     local role_path
 
     # Iterate over all policies
-    cat -- "$@" |
     while
         if test -n "${line}"
         then
@@ -311,31 +326,46 @@ delete_roles()
                 fi
                 ;;
         esac
-        if ((${#grep_regexps[@]})) && grep --extended-regexp --line-regexp "${grep_regexps[@]}" <<< "${role}"
+
+        if ((${#regexps[@]})) && grep -E --line-regexp "${regexps[@]}" <<< "${role}"
         then
             >&2 printf '* Role %s matches an exclude-pattern - skipping\n' "${role}"
             continue
         fi
+
         if ! role_exists "${role}"
         then
             >&2 printf '* Role %s does not exist - skipping\n' "${role}"
             continue
         fi
+
+        if ((do_not_delete))
+        then
+            printf 'Would operate on role %s\n' "${role}"
+            continue
+        fi
+
         if ((confirm_deletion)) && ! confirm "Delete role ${role}?"
         then
             continue
         fi
-        >&2 printf '> Operating on role %s\n' "${role}"
+
+        >&2 printf 'Operating on role %s\n' "${role}"
         if
             remove_role_from_instance_profiles "${role}" &&
             delete_inline_role_policies "${role}" &&
             detach_managed_role_policies "${role}" &&
             delete_role "${role}"
         then
-            printf 'Deleted role %s\n' "${role}"
+            >&2 printf 'Success on role %s\n' "${role}"
+        else
+            >&2 printf 'Failure on role %s\n' "${role}"
         fi
-    done 4<&0 0<&3 3<&4 4<&-
-} 3<&0
+
+    done 3< <(cat -- "$@")
+
+    return 0
+}
 
 
 ################
@@ -344,20 +374,15 @@ delete_roles()
 main()
 {
     local aws_cmd=("aws" "--output" "json")
-    local profile=""
-    local -i delete_aws_roles=0
     local -i confirm_deletion=0
+    local -i delete_aws_roles=0
     local -i delete_instance_profiles=0
+    local -i do_not_delete=0
     local -i verbose=0
-    local grep_regexps=()
+    local regexps=()
 
     parse_opts "$@"
     shift "$((OPTIND - 1))"
-
-    if ((verbose)) && test -n "${profile}"
-    then
-        >&2 printf '* Using AWS CLI profile %s\n' "${profile}"
-    fi
 
     delete_roles "$@"
 }
