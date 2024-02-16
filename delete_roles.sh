@@ -34,7 +34,7 @@ optional arguments:
   -o OUTPUT     Output filename
   -p PROFILE    AWS CLI profile name
   -v            Show each action being taken (verbose)
-  -x PATTERN    Exclude role names matching pattern (extended regexp, like egrep)
+  -x PATTERN    Exclude role names matching a pattern (extended regexp, like egrep)
   -h            Show this help message and exit
 EOF
 
@@ -54,7 +54,6 @@ usage()
 parse_opts()
 {
     OPTIND=1
-    OPTARG=""
 
     local opt=""
 
@@ -85,7 +84,7 @@ parse_opts()
                 verbose+=1
                 ;;
             "x")
-                grep_regexps+=(-e "${OPTARG}")
+                grep_regexps=("${grep_regexps[@]}" "-e" "${OPTARG}")
                 ;;
             "?")
                 >&2 printf '%s: -%s: unrecognized option\n' "${PROGNAME}" "${OPTARG}"
@@ -108,6 +107,7 @@ parse_opts()
 confirm()
 {
     local response
+
     while
         >&2 printf '%s(y/n) ' "${1:+$1 }"
         read -r response
@@ -143,12 +143,11 @@ remove_role_from_instance_profiles()
             >&2 printf '*** Failed to remove role from instance profile %s\n' "${instance_profile}"
             return 1
         fi
-
         if ! ((delete_instance_profiles))
         then
+            printf 'Skipped deletion of instance profile %s\n' "${instance_profile}"
             continue
         fi
-
         if ((verbose))
         then
             >&2 printf '==> Deleting instance profile %s\n' "${instance_profile}"
@@ -270,13 +269,16 @@ delete_roles()
         then
             >&2 echo
         fi
-        read -r -u 4 line
+        read -r -u 3 line
     do
         if ((verbose))
         then
             >&2 printf '> %s\n' "${line}"
         fi
         case "${line}" in
+            "")
+                continue
+                ;;
             arn:aws:iam::*:role/*)
                 role="${line#arn:aws:iam::*:role/}"
                 ;;
@@ -284,8 +286,11 @@ delete_roles()
                 >&2 printf '* ARN %s does not refer to an IAM role - skipping\n' "${line}"
                 continue
                 ;;
-            "")
-                continue
+            role/*)
+                role="${line#role/}"
+                ;;
+            *)
+                role="${line}"
                 ;;
         esac
         case "${role}" in
@@ -316,25 +321,20 @@ delete_roles()
             >&2 printf '* Role %s does not exist - skipping\n' "${role}"
             continue
         fi
-
         if ((confirm_deletion)) && ! confirm "Delete role ${role}?"
         then
             continue
         fi
-
         >&2 printf '> Operating on role %s\n' "${role}"
-
-        if {
+        if
             remove_role_from_instance_profiles "${role}" &&
             delete_inline_role_policies "${role}" &&
             detach_managed_role_policies "${role}" &&
             delete_role "${role}"
-        }
         then
             printf 'Deleted role %s\n' "${role}"
         fi
-
-    done 4<&0 0<&3
+    done 4<&0 0<&3 3<&4 4<&-
 } 3<&0
 
 
@@ -344,7 +344,7 @@ delete_roles()
 main()
 {
     local aws_cmd=("aws" "--output" "json")
-    local profile="default"
+    local profile=""
     local -i delete_aws_roles=0
     local -i confirm_deletion=0
     local -i delete_instance_profiles=0
@@ -354,7 +354,7 @@ main()
     parse_opts "$@"
     shift "$((OPTIND - 1))"
 
-    if ((verbose))
+    if ((verbose)) && test -n "${profile}"
     then
         >&2 printf '* Using AWS CLI profile %s\n' "${profile}"
     fi
