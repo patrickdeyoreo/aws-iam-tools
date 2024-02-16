@@ -360,8 +360,6 @@ main()
     fi
 
     delete_roles "$@"
-
-    return 0
 }
 
 
