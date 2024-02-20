@@ -388,7 +388,6 @@ role_exists()
     then
         return 1
     fi
-    return 0
 }
 
 
@@ -463,7 +462,6 @@ remove_role_from_instance_profiles()
         "${aws_cmd[@]}" iam list-instance-profiles-for-role --role-name "$1" --query 'InstanceProfiles[*].InstanceProfileName' |
         jq --raw-output --compact-output '.[]'
     )
-    return 0
 }
 
 
@@ -513,7 +511,6 @@ delete_inline_role_policies()
         "${aws_cmd[@]}" iam list-role-policies --role-name "$1" --query 'PolicyNames' |
         jq --raw-output --compact-output '.[]'
     )
-    return 0
 }
 
 
@@ -559,7 +556,6 @@ detach_managed_role_policies()
         "${aws_cmd[@]}" iam list-attached-role-policies --role-name "$1" --query 'AttachedPolicies[*].PolicyArn' |
         jq --raw-output --compact-output '.[]'
     )
-    return 0
 }
 
 
@@ -591,7 +587,6 @@ delete_role()
         return 1
     fi
     printf 'Deleted role %s\n' "${role}"
-    return 0
 }
 
 
@@ -859,8 +854,6 @@ destroy()
         fi
 
     done 3< <(cat -- "$@")
-
-    return 0
 }
 
 
