@@ -7,6 +7,7 @@
 #        delete_roles restore [-h] [-c] DIRECTORY
 
 set -e
+exec 4>&1
 
 __progname__="${0##*/}"
 
@@ -69,6 +70,24 @@ optional arguments:
 
 
 ################
+# Print if verbosity is at or above given level
+################
+log()
+{
+    local level
+
+    level=$(($1))
+    shift
+    
+    if ((verbose >= level))
+    then
+        # shellcheck disable=SC2059
+        printf "$@"
+    fi
+}
+
+
+################
 # Check if a subcommand is recognized
 ################
 is_subcommand()
@@ -95,12 +114,11 @@ help()
 
     if (($# == 0))
     then
-        help_name="__global_help__"
-        printf '%s\n' "${!help_name}"
+        log 0 '%s\n' "${__global_help__}"
     elif is_subcommand "$1"
     then
         help_name="__${1}_help__"
-        printf '%s\n' "${!help_name}"
+        log 0 '%s\n' "${!help_name}"
     else
         return 1
     fi
@@ -116,12 +134,11 @@ usage()
 
     if (($# == 0))
     then
-        usage_name="__global_usage__"
-        printf 'usage: %s\n' "${!usage_name}"
+        log 0 'usage: %s\n' "${__global_usage__}"
     elif is_subcommand "$1"
     then
         usage_name="__${1}_usage__"
-        printf 'usage: %s\n' "${!usage_name}"
+        log 0 'usage: %s\n' "${!usage_name}"
     else
         return 1
     fi
@@ -148,7 +165,7 @@ parse_opts()
                 dry_run=1
                 ;;
             "o")
-                exec 1> "${OPTARG}"
+                exec 4> "${OPTARG}"
                 ;;
             "p")
                 profile="${OPTARG}"
@@ -158,12 +175,12 @@ parse_opts()
                 verbose+=1
                 ;;
             "?")
-                >&2 printf '%s: -%s: unrecognized option\n' "${__progname__}" "${OPTARG}"
+                >&2 log 0 '%s: -%s: unrecognized option\n' "${__progname__}" "${OPTARG}"
                 >&2 usage
                 exit 2
                 ;;
             ":")
-                >&2 printf '%s: -%s: missing required argument\n' "${__progname__}" "${OPTARG}"
+                >&2 log 0 '%s: -%s: missing required argument\n' "${__progname__}" "${OPTARG}"
                 >&2 usage
                 exit 2
                 ;;
@@ -181,7 +198,7 @@ parse_opts()
 
     if ! is_subcommand "${subcommand}"
     then
-        >&2 printf '%s: %s: unrecognized subcommand\n' "${__progname__}" "${subcommand}"
+        >&2 log 0 '%s: %s: unrecognized subcommand\n' "${__progname__}" "${subcommand}"
         >&2 usage
         exit 2
     fi
@@ -221,12 +238,12 @@ __parse_opts_destroy()
                 regexps+=("-e" "${OPTARG}")
                 ;;
             "?")
-                >&2 printf '%s: -%s: unrecognized option\n' "${__progname__}" "${OPTARG}"
+                >&2 log 0 '%s: -%s: unrecognized option\n' "${__progname__}" "${OPTARG}"
                 >&2 usage destroy
                 exit 2
                 ;;
             ":")
-                >&2 printf '%s: -%s: missing required argument\n' "${__progname__}" "${OPTARG}"
+                >&2 log 0 '%s: -%s: missing required argument\n' "${__progname__}" "${OPTARG}"
                 >&2 usage destroy
                 exit 2
                 ;;
@@ -260,12 +277,12 @@ __parse_opts_restore()
                 confirm=1
                 ;;
             "?")
-                >&2 printf '%s: -%s: unrecognized option\n' "${__progname__}" "${OPTARG}"
+                >&2 log 0 '%s: -%s: unrecognized option\n' "${__progname__}" "${OPTARG}"
                 >&2 usage restore
                 exit 2
                 ;;
             ":")
-                >&2 printf '%s: -%s: missing required argument\n' "${__progname__}" "${OPTARG}"
+                >&2 log 0 '%s: -%s: missing required argument\n' "${__progname__}" "${OPTARG}"
                 >&2 usage restore
                 exit 2
                 ;;
@@ -280,25 +297,9 @@ __parse_opts_restore()
     fi
     if (($# > 1))
     then
-        >&2 printf '%s: too many arguments\n' "${__progname__}"
+        >&2 log 0 '%s: too many arguments\n' "${__progname__}"
         >&2 usage restore
         exit 2
-    fi
-}
-
-
-################
-# Print if verbosity is at a given level
-################
-printf_verbose()
-{
-    local level=$(($1))
-
-    shift
-    if ((verbose >= level))
-    then
-        # shellcheck disable=SC2059
-        printf "$@"
     fi
 }
 
@@ -311,7 +312,7 @@ confirm()
     local response
 
     while
-        >&2 printf '%s(y/n) ' "${1:+$1 }"
+        >&2 log 0 '%s(y/n) ' "${1:+$1 }"
         read -r response
     do
         case "${response}" in
@@ -342,25 +343,25 @@ setup_new_backup_dir()
             bkp_num+=1
         done
 
-        >&2 printf_verbose 2 '* Renaming existing backup directory %s to %s\n' "${backup_dir}" "${backup_dir}.${bkp_num}"
+        >&2 log 2 '* Renaming existing backup directory %s to %s\n' "${backup_dir}" "${backup_dir}.${bkp_num}"
 
         if ! mv -- "${backup_dir}" "${backup_dir}.${bkp_num}"
         then
-            >&2 printf '%s: %s: could not rename existing backup directory\n' "${__progname__}" "${backup_dir}"
+            >&2 log 0 '%s: %s: could not rename existing backup directory\n' "${__progname__}" "${backup_dir}"
             exit 1
         fi
     fi
 
-    >&2 printf_verbose 1 '* Creating new backup directory %s\n' "${backup_dir}"
+    >&2 log 1 '* Creating new backup directory %s\n' "${backup_dir}"
 
     # Create new backup directory
     if ! mkdir -p -- "${backup_dir}"
     then
-        >&2 printf '%s: %s: could not create new backup directory\n' "${__progname__}" "${backup_dir}"
+        >&2 log 0 '%s: %s: could not create new backup directory\n' "${__progname__}" "${backup_dir}"
         exit 1
     fi
 
-    >&2 printf_verbose 2 '* Checking permissions on backup directory %s\n' "${backup_dir}"
+    >&2 log 2 '* Checking permissions on backup directory %s\n' "${backup_dir}"
 
     # Check permissions on backup directory
     if ! {
@@ -369,11 +370,11 @@ setup_new_backup_dir()
         test -x "${backup_dir}"
     }
     then
-        >&2 printf '%s: %s: insufficient permissions on backup directory\n' "${__progname__}" "${backup_dir}"
+        >&2 log 0 '%s: %s: insufficient permissions on backup directory\n' "${__progname__}" "${backup_dir}"
         exit 1
     fi
 
-    >&2 printf_verbose 1 '\n'
+    >&2 log 1 '\n'
 }
 
 
@@ -382,7 +383,7 @@ setup_new_backup_dir()
 ################
 role_exists()
 {
-    >&2 printf_verbose 1 '==> Checking if role %s exists\n' "$1"
+    >&2 log 1 '==> Checking if role %s exists\n' "$1"
 
     if ! "${aws_cmd[@]}" iam get-role --role-name "$1" > /dev/null 2>&1
     then
@@ -402,36 +403,39 @@ remove_role_from_instance_profiles()
     # Create instance profile backup directory
     if ((backups)) && ! mkdir -- "${instance_profile_backup_dir}"
     then
-        >&2 printf '* Failed to create instance profile backup directory %s\n' "${instance_profile_backup_dir}"
+        >&2 log 0 '* Failed to create instance profile backup directory %s\n' "${instance_profile_backup_dir}"
         return 1
     fi
 
     # Iterate over instance profiles
     while read -r -u 3 instance_profile
     do
-        >&2 printf_verbose 1 '==> Removing role from instance profile %s\n' "${instance_profile}"
+        >&2 log 1 '==> Removing role from instance profile %s\n' "${instance_profile}"
 
         # Backup instance profile attachment
         if ((backups))
         then
-            if ! printf '%s\n' "${instance_profile}" >> "${instance_profile_backup_dir}/instance_profiles.txt"
+            if ! echo -E "${instance_profile}" >> "${instance_profile_backup_dir}/instance_profiles.txt"
             then
-                >&2 printf '*** Failed to back up instance profile attachment to %s\n' "${instance_profile_backup_dir}/instance_profiles.txt"
+                >&2 log 1 '*** Failed to back up role mapping for instance profile %s\n' "${instance_profile}"
+                >&4 log 0 'Failed to back up role mapping for instance profile %s\n' "${instance_profile}"
                 return 1
             fi
         fi
 
         # Detach instance profile
-        if ! "${aws_cmd[@]}" iam remove-role-from-instance-profile --instance-profile-name "${instance_profile}" --role-name "$1" > /dev/null
+        if "${aws_cmd[@]}" iam remove-role-from-instance-profile --instance-profile-name "${instance_profile}" --role-name "$1" > /dev/null
         then
-            >&2 printf '*** Failed to remove role from instance profile %s\n' "${instance_profile}"
+            >&4 log 0 'Removed role from instance profile %s\n' "${instance_profile}"
+        else
+            >&2 log 1 '*** Failed to remove role from instance profile %s\n' "${instance_profile}"
+            >&4 log 0 'Failed to remove role from instance profile %s\n' "${instance_profile}"
             return 1
         fi
-        printf 'Removed role from instance profile %s\n' "${instance_profile}"
 
         if ((delete_instance_profiles))
         then
-            >&2 printf_verbose 1 '==> Deleting instance profile %s\n' "${instance_profile}"
+            >&2 log 1 '==> Deleting instance profile %s\n' "${instance_profile}"
         else
             continue
         fi
@@ -439,24 +443,27 @@ remove_role_from_instance_profiles()
         # Backup instance profile
         if ((backups))
         then
-            >&2 printf_verbose 1 '==> Backing up instance profile to %s\n' "${instance_profile_backup_dir}/${instance_profile}.json"
+            >&2 log 1 '==> Backing up instance profile to %s\n' "${instance_profile_backup_dir}/${instance_profile}.json"
             if ! {
                 "${aws_cmd[@]}" iam get-instance-profile --instance-profile-name "${instance_profile}" --query 'InstanceProfile' |
                 jq 'with_entries(select(.key == ("Path", "Tags")))' >> "${instance_profile_backup_dir}/${instance_profile}.json"
             }
             then
-                >&2 printf '*** Failed to back up instance profile to %s\n' "${instance_profile_backup_dir}/${instance_profile}.json"
+                >&2 log 1 '*** Failed to back up instance profile %s\n' "${instance_profile}"
+                >&4 log 0 'Failed to back up instance profile %s\n' "${instance_profile}"
                 return 1
             fi
         fi
 
         # Delete instance profile
-        if ! "${aws_cmd[@]}" iam delete-instance-profile --instance-profile-name "${instance_profile}" > /dev/null
+        if "${aws_cmd[@]}" iam delete-instance-profile --instance-profile-name "${instance_profile}" > /dev/null
         then
-            >&2 printf '*** Failed to delete instance profile %s\n' "${instance_profile}"
-            continue
+            >&4 log 0 'Deleted instance profile %s\n' "${instance_profile}"
+        else
+            >&2 log 1 '*** Failed to delete instance profile %s\n' "${instance_profile}"
+            >&4 log 0 'Failed to delete instance profile %s\n' "${instance_profile}"
+            return 1
         fi
-        printf 'Deleted instance profile %s\n' "${instance_profile}"
 
     done 3< <(
         "${aws_cmd[@]}" iam list-instance-profiles-for-role --role-name "$1" --query 'InstanceProfiles[*].InstanceProfileName' |
@@ -476,36 +483,39 @@ delete_inline_role_policies()
     # Create inline role policy backup directory
     if ((backups)) && ! mkdir -- "${inline_policy_backup_dir}"
     then
-        >&2 printf '* Failed to create inline policy backup directory %s\n' "${inline_policy_backup_dir}"
+        >&2 log 0 '* Failed to create inline policy backup directory %s\n' "${inline_policy_backup_dir}"
         return 1
     fi
 
     # Iterate over inline role policies
     while read -r -u 3 policy
     do
-        >&2 printf_verbose 1 '==> Deleting inline role policy %s\n' "${policy}"
+        >&2 log 1 '==> Deleting inline role policy %s\n' "${policy}"
 
         # Backup inline policy
         if ((backups))
         then
-            >&2 printf_verbose 1 '==> Backing up inline policy to %s\n' "${inline_policy_backup_dir}/${policy}.json"
+            >&2 log 1 '==> Backing up inline policy to %s\n' "${inline_policy_backup_dir}/${policy}.json"
             if ! {
                 "${aws_cmd[@]}" iam get-role-policy --role-name "$1" --policy-name "${policy}" |
                 jq 'with_entries(select(.key == ("PolicyDocument")))' >> "${inline_policy_backup_dir}/${policy}.json"
             }
             then
-                >&2 printf '*** Failed to back up inline policy to %s\n' "${inline_policy_backup_dir}/${policy}.json"
+                >&2 log 1 '*** Failed to back up inline policy %s\n' "${policy}"
+                >&4 log 0 'Failed to back up inline policy %s\n' "${policy}"
                 return 1
             fi
         fi
 
         # Delete inline policy
-        if ! "${aws_cmd[@]}" iam delete-role-policy --role-name "$1" --policy-name "${policy}" > /dev/null
+        if "${aws_cmd[@]}" iam delete-role-policy --role-name "$1" --policy-name "${policy}" > /dev/null
         then
-            >&2 printf '*** Failed to delete inline policy %s\n' "${policy}"
+            >&4 log 0 'Deleted inline policy %s\n' "${policy}"
+        else
+            >&2 log 1 '*** Failed to delete inline policy %s\n' "${policy}"
+            >&4 log 0 'Failed to delete inline policy %s\n' "${policy}"
             return 1
         fi
-        printf 'Deleted inline policy %s\n' "${policy}"
 
     done 3< <(
         "${aws_cmd[@]}" iam list-role-policies --role-name "$1" --query 'PolicyNames' |
@@ -525,32 +535,35 @@ detach_managed_role_policies()
     # Create managed role policy backup directory
     if ((backups)) && ! mkdir -- "${managed_policy_backup_dir}"
     then
-        >&2 printf '* Failed to create managed policy backup directory %s\n' "${managed_policy_backup_dir}"
+        >&2 log 0 '* Failed to create managed policy backup directory %s\n' "${managed_policy_backup_dir}"
         return 1
     fi
 
     # Iterate over managed role policies
     while read -r -u 3 policy
     do
-        >&2 printf_verbose 1 '==> Detaching managed policy %s\n' "${policy}"
+        >&2 log 1 '==> Detaching managed policy %s\n' "${policy}"
 
         # Backup managed policy attachment
         if ((backups))
         then
-            if ! printf '%s\n' "${policy}" >> "${managed_policy_backup_dir}/managed_policies.txt"
+            if ! echo -E "${policy}" >> "${managed_policy_backup_dir}/managed_policies.txt"
             then
-                >&2 printf '*** Failed to back up managed policy attachment to %s\n' "${managed_policy_backup_dir}/managed_policies.txt"
+                >&2 log 1 '*** Failed to back up role attachment for managed policy %s\n' "${policy}"
+                >&4 log 0 'Failed to back up role attachment for managed policy %s\n' "${policy}"
                 return 1
             fi
         fi
 
         # Detach managed policy
-        if ! "${aws_cmd[@]}" iam detach-role-policy --role-name "$1" --policy-arn "${policy}" > /dev/null
+        if "${aws_cmd[@]}" iam detach-role-policy --role-name "$1" --policy-arn "${policy}" > /dev/null
         then
-            >&2 printf '*** Failed to detach managed policy %s\n' "${policy}"
+            >&4 log 0 'Detached managed policy %s\n' "${policy}"
+        else
+            >&2 log 1 '*** Failed to detach managed policy %s\n' "${policy}"
+            >&4 log 0 'Failed to detach managed policy %s\n' "${policy}"
             return 1
         fi
-        printf 'Detached managed policy %s\n' "${policy}"
 
     done 3< <(
         "${aws_cmd[@]}" iam list-attached-role-policies --role-name "$1" --query 'AttachedPolicies[*].PolicyArn' |
@@ -564,29 +577,35 @@ detach_managed_role_policies()
 ################
 delete_role()
 {
-    >&2 printf_verbose 1 '==> Deleting role %s\n' "$1"
+    local role="$1"
+    local role_backup_dir="${backup_dir}/${role}"
+
+    >&2 log 1 '==> Deleting role %s\n' "${role}"
 
     # Backup role
     if ((backups))
     then
-        >&2 printf_verbose 1 '==> Backing up role to %s\n' "${backup_dir}/$1/role.json"
+        >&2 log 1 '==> Backing up role to %s\n' "${role_backup_dir}/role.json"
         if ! {
-            "${aws_cmd[@]}" iam get-role --role-name "$1" --query "Role" |
-            jq 'with_entries(select(.key == ("Path", "RoleName", "AssumeRolePolicyDocument", "Description", "MaxSessionDuration", "PermissionsBoundary", "Tags")))' > "${backup_dir}/$1/role.json"
+            "${aws_cmd[@]}" iam get-role --role-name "${role}" --query "Role" |
+            jq 'with_entries(select(.key == ("Path", "RoleName", "AssumeRolePolicyDocument", "Description", "MaxSessionDuration", "PermissionsBoundary", "Tags")))' > "${role_backup_dir}/role.json"
         }
         then
-            >&2 printf '*** Failed to back up role to %s\n' "${backup_dir}/$1/role.json"
+            >&2 log 1 '*** Failed to back up role %s\n' "${role}"
+            >&4 log 0 'Failed to back up role %s\n' "${role}"
             return 1
         fi
     fi
 
     # Delete role
-    if ! "${aws_cmd[@]}" iam delete-role --role-name "$1" > /dev/null
+    if "${aws_cmd[@]}" iam delete-role --role-name "${role}" > /dev/null
     then
-        >&2 printf '*** Failed to delete role %s\n' "$1"
+        >&4 log 0 'Deleted role %s\n' "${role}"
+    else
+        >&2 log 1 '*** Failed to delete role %s\n' "${role}"
+        >&4 log 0 'Failed to delete role %s\n' "${role}"
         return 1
     fi
-    printf 'Deleted role %s\n' "${role}"
 }
 
 
@@ -600,11 +619,11 @@ restore_instance_profiles()
 
     if ! test -d "$1/instance_profiles"
     then
-        >&2 printf_verbose 1 '*** No instance profile backup directory %s\n' "$1/instance_profiles"
+        >&2 log 1 '*** No instance profile backup directory %s\n' "$1/instance_profiles"
         return 1
     fi
 
-    >&2 printf_verbose 1 '==> Restoring instance profiles\n'
+    >&2 log 1 '==> Restoring instance profiles\n'
 
     for data_file in "$1"/instance_profiles/*.json
     do
@@ -613,34 +632,38 @@ restore_instance_profiles()
             instance_profile_name="${data_file##*/}"
             instance_profile_name="${instance_profile_name%.json}"
 
-            >&2 printf_verbose 1 '==> Creating instance profile %s\n' "${instance_profile_name}"
+            >&2 log 1 '==> Creating instance profile %s\n' "${instance_profile_name}"
 
             if "${aws_cmd[@]}" iam create-instance-profile \
                 --instance-profile-name "${instance_profile_name}" \
                 --cli-input-json "$(< "${data_file}")"
             then
-                printf 'Created instance profile %s\n' "${instance_profile_name}"
+                >&4 log 0 'Created instance profile %s\n' "${instance_profile_name}"
             else
-                >&2 printf '*** Failed to create instance profile %s\n' "${instance_profile}"
+                >&2 log 1 '*** Failed to create instance profile %s\n' "${instance_profile}"
+                >&4 log 0 'Failed to create instance profile %s\n' "${instance_profile}"
+                return 1
             fi
         fi
     done
 
-    >&2 printf_verbose 1 '==> Adding role to instance profiles\n'
+    >&2 log 1 '==> Adding role to instance profiles\n'
 
     if test -a "$1/instance_profiles/instance_profiles.txt"
     then
         while read -r -u 3 instance_profile_name
         do
-            >&2 printf_verbose 1 '==> Adding role to instance profile %s\n' "${instance_profile_name}"
+            >&2 log 1 '==> Adding role to instance profile %s\n' "${instance_profile_name}"
 
             if "${aws_cmd[@]}" iam add-role-to-instance-profile \
                 --instance-profile-name "${instance_profile_name}" \
                 --role-name "${1##*/}"
             then
-                printf 'Added role to instance profile %s\n' "${instance_profile_name}"
+                >&4 log 0 'Added role to instance profile %s\n' "${instance_profile_name}"
             else
-                >&2 printf '*** Failed to add role to instance profile %s\n' "${instance_profile}"
+                >&2 log 1 '*** Failed to add role to instance profile %s\n' "${instance_profile}"
+                >&4 log 0 'Failed to add role to instance profile %s\n' "${instance_profile}"
+                return 1
             fi
         done 3< "$1/instance_profiles/instance_profiles.txt"
     fi
@@ -656,25 +679,27 @@ restore_managed_role_policies()
 
     if ! test -d "$1/managed_policies"
     then
-        >&2 printf_verbose 1 '*** No managed policy attachment backup directory %s\n' "$1/managed_policies"
+        >&2 log 1 '*** No managed policy attachment backup directory %s\n' "$1/managed_policies"
         return 1
     fi
 
-    >&2 printf_verbose 1 '==> Restoring managed policy attachments\n'
+    >&2 log 1 '==> Restoring managed policy attachments\n'
 
     if test -a "$1/managed_policies/managed_policies.txt"
     then
         while read -r -u 3 policy_arn
         do
-            >&2 printf_verbose 1 '==> Attaching managed policy %s\n' "${policy_arn}"
+            >&2 log 1 '==> Attaching managed policy %s\n' "${policy_arn}"
 
             if "${aws_cmd[@]}" iam attach-role-policy \
                 --role-name "${1##*/}" \
                 --policy-arn "${policy_arn}"
             then
-                printf 'Attached managed policy %s\n' "${policy_arn}"
+                >&4 log 0 'Attached managed policy %s\n' "${policy_arn}"
             else
-                >&2 printf '*** Failed to attach managed policy %s\n' "${policy_arn}"
+                >&2 log 1 '*** Failed to attach managed policy %s\n' "${policy_arn}"
+                >&4 log 0 'Failed to attach managed policy %s\n' "${policy_arn}"
+                return 1
             fi
         done 3< "$1/managed_policies/managed_policies.txt"
     fi
@@ -691,11 +716,11 @@ restore_inline_role_policies()
 
     if ! test -d "$1/inline_policies"
     then
-        >&2 printf_verbose 1 '*** No inline policy backup directory %s\n' "$1/inline_policies"
+        >&2 log 1 '*** No inline policy backup directory %s\n' "$1/inline_policies"
         return 1
     fi
 
-    >&2 printf_verbose 1 '==> Restoring inline policies\n'
+    >&2 log 1 '==> Restoring inline policies\n'
 
     for data_file in "$1"/inline_policies/*.json
     do
@@ -704,7 +729,7 @@ restore_inline_role_policies()
             policy_name="${data_file##*/}"
             policy_name="${policy_name%.json}"
 
-            >&2 printf_verbose 1 '==> Creating inline policy %s\n' "${policy_name}"
+            >&2 log 1 '==> Creating inline policy %s\n' "${policy_name}"
 
             if "${aws_cmd[@]}" iam put-role-policy \
                 --role-name "${1##*/}" \
@@ -712,9 +737,11 @@ restore_inline_role_policies()
                 --policy-document "$(jq ".PolicyDocument" < "${data_file}")" \
                 --cli-input-json "$(< "${data_file}")"
             then
-                printf 'Created inline policy %s\n' "${policy_name}"
+                >&4 log 0 'Created inline policy %s\n' "${policy_name}"
             else
-                >&2 printf '*** Failed to create inline policy %s\n' "${policy_name}"
+                >&2 log 1 '*** Failed to create inline policy %s\n' "${policy_name}"
+                >&4 log 0 'Failed to create inline policy %s\n' "${policy_name}"
+                return 1
             fi
         fi
     done
@@ -730,20 +757,21 @@ restore_role()
 
     if ! test -f "$1/role.json"
     then
-        >&2 printf_verbose 1 '*** No role backup file %s\n' "$1/role.json"
+        >&2 log 1 '*** No role backup file %s\n' "$1/role.json"
         return 1
     fi
 
-    >&2 printf_verbose 1 '==> Creating role %s\n' "${role_name}"
+    >&2 log 1 '==> Creating role %s\n' "${role_name}"
 
     if "${aws_cmd[@]}" iam create-role \
         --role-name "${role_name}" \
         --assume-role-policy-document "$(jq ".AssumeRolePolicyDocument" < "$1/role.json")" \
         --cli-input-json "$(< "$1/role.json")"
     then
-        printf 'Created role %s\n' "${role_name}"
+        >&4 log 0 'Created role %s\n' "${role_name}"
     else
-        >&2 printf '*** Failed to create role %s\n' "${role_name}"
+        >&2 log 1 '*** Failed to create role %s\n' "${role_name}"
+        >&4 log 0 'Failed to create role %s\n' "${role_name}"
     fi
 }
 
@@ -772,7 +800,7 @@ destroy()
         fi
         read -r -u 3 line
     do
-        >&2 printf_verbose 1 '> %s\n' "${line}"
+        >&2 log 1 '> %s\n' "${line}"
 
         case "${line}" in
             "")
@@ -782,7 +810,7 @@ destroy()
                 role="${line#arn:aws:iam::*:role/}"
                 ;;
             arn:aws:*:*:*:*)
-                >&2 printf '* ARN %s does not refer to an IAM role - skipping\n' "${line}"
+                >&2 log 0 '* ARN %s does not refer to an IAM role - skipping\n' "${line}"
                 continue
                 ;;
             role/*)
@@ -805,7 +833,7 @@ destroy()
             aws-*)
                 if ! ((delete_aws_roles))
                 then
-                    >&2 printf '* Role %s is an AWS-managed role - skipping\n' "${role}"
+                    >&2 log 0 '* Role %s is an AWS-managed role - skipping\n' "${role}"
                     continue
                 fi
                 ;;
@@ -813,19 +841,19 @@ destroy()
 
         if ((${#regexps[@]})) && grep -E --line-regexp "${regexps[@]}" <<< "${role}"
         then
-            >&2 printf '* Role %s matches an exclude-pattern - skipping\n' "${role}"
+            >&2 log 0 '* Role %s matches an exclude-pattern - skipping\n' "${role}"
             continue
         fi
 
         if ! role_exists "${role}"
         then
-            >&2 printf '* Role %s does not exist - skipping\n' "${role}"
+            >&2 log 0 '* Role %s does not exist - skipping\n' "${role}"
             continue
         fi
 
         if ((dry_run))
         then
-            printf 'Would destroy role %s\n' "${role}"
+            >&4 log 0 'Would destroy role %s\n' "${role}"
             continue
         fi
 
@@ -836,21 +864,20 @@ destroy()
 
         if ((backups)) && ! mkdir -- "${backup_dir}/${role}"
         then
-            >&2 printf '* Failed to create role backup directory %s - skipping\n' "${backup_dir}/$1"
+            >&2 log 0 '* Failed to create role backup directory %s - skipping\n' "${backup_dir}/$1"
             continue
         fi
 
-        >&2 printf 'Destroying role %s\n' "${role}"
-
+        >&2 log 0 'Destroying role %s\n' "${role}"
         if
             remove_role_from_instance_profiles "${role}" &&
             delete_inline_role_policies "${role}" &&
             detach_managed_role_policies "${role}" &&
             delete_role "${role}"
         then
-            >&2 printf 'Success destroying role %s\n' "${role}"
+            >&2 log 0 'Success destroying role %s\n' "${role}"
         else
-            >&2 printf 'Failure destroying role %s\n' "${role}"
+            >&2 log 0 'Failure destroying role %s\n' "${role}"
         fi
 
     done 3< <(cat -- "$@")
@@ -868,7 +895,7 @@ restore()
     # Check if the restoration directory exists
     if ! test -d "$1"
     then
-        >&2 printf '%s: %s: no such directory\n' "${__progname__}" "$1"
+        >&2 log 0 '%s: %s: no such directory\n' "${__progname__}" "$1"
         exit 2
     fi
 
@@ -883,13 +910,13 @@ restore()
                 >&2 echo
             fi
 
-            >&2 printf_verbose 1 '> %s\n' "${path}"
+            >&2 log 1 '> %s\n' "${path}"
 
             role="${path##*/}"
 
             if ((dry_run))
             then
-                printf 'Would restore role %s\n' "${role}"
+                >&4 log 0 'Would restore role %s\n' "${role}"
                 continue
             fi
 
@@ -898,17 +925,16 @@ restore()
                 continue
             fi
 
-            >&2 printf 'Restoring role %s\n' "${role}"
-
+            >&2 log 0 'Restoring role %s\n' "${role}"
             if
                 restore_role "${path}" &&
                 restore_inline_role_policies "${path}" &&
                 restore_managed_role_policies "${path}" &&
                 restore_instance_profiles "${path}"
             then
-                >&2 printf 'Success restoring role %s\n' "${role}"
+                >&2 log 0 'Success restoring role %s\n' "${role}"
             else
-                >&2 printf 'Failure restoring role %s\n' "${role}"
+                >&2 log 0 'Failure restoring role %s\n' "${role}"
             fi
         fi
     done
@@ -936,17 +962,17 @@ main()
 
     shift "$((OPTIND - 1))"
 
-    >&2 printf_verbose 2 '=============================\n'
-    >&2 printf_verbose 2 '+ AWS CLI command:          %s\n' "${aws_cmd[*]}"
-    >&2 printf_verbose 2 '+ AWS CLI profile:          %s\n' "${profile}"
-    >&2 printf_verbose 2 '+ Backups:                  %s\n' "${backups}"
-    >&2 printf_verbose 2 '+ Backup directory:         %s\n' "${backup_dir}"
-    >&2 printf_verbose 2 '+ Confirm operations:       %s\n' "${confirm}"
-    >&2 printf_verbose 2 '+ Delete AWS-managed roles: %s\n' "${delete_aws_roles}"
-    >&2 printf_verbose 2 '+ Delete instance profiles: %s\n' "${delete_instance_profiles}"
-    >&2 printf_verbose 2 '+ Dry-run:                  %s\n' "${dry_run}"
-    >&2 printf_verbose 2 '+ Subcommand:               %s\n' "${subcommand}"
-    >&2 printf_verbose 2 '=============================\n\n'
+    >&2 log 2 '=============================\n'
+    >&2 log 2 '+ AWS CLI command:          %s\n' "${aws_cmd[*]}"
+    >&2 log 2 '+ AWS CLI profile:          %s\n' "${profile}"
+    >&2 log 2 '+ Backups:                  %s\n' "${backups}"
+    >&2 log 2 '+ Backup directory:         %s\n' "${backup_dir}"
+    >&2 log 2 '+ Confirm operations:       %s\n' "${confirm}"
+    >&2 log 2 '+ Delete AWS-managed roles: %s\n' "${delete_aws_roles}"
+    >&2 log 2 '+ Delete instance profiles: %s\n' "${delete_instance_profiles}"
+    >&2 log 2 '+ Dry-run:                  %s\n' "${dry_run}"
+    >&2 log 2 '+ Subcommand:               %s\n' "${subcommand}"
+    >&2 log 2 '=============================\n\n'
 
     "${subcommand}" "$@"
 }
