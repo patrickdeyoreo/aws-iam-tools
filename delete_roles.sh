@@ -810,7 +810,7 @@ destroy()
     while
         if test -n "${line}"
         then
-            sleep 0.5
+            sleep 0.34
             >&2 echo
         fi
         read -r -u 3 line
@@ -914,6 +914,8 @@ destroy()
         fi
 
     done 3< <(cat -- "$@")
+
+    >&2 log 1 'Done\n'
 }
 
 
@@ -939,7 +941,7 @@ restore()
         then
             if test -n "${role}"
             then
-                sleep 0.5
+                sleep 0.34
                 >&2 echo
             fi
 
@@ -971,6 +973,8 @@ restore()
             fi
         fi
     done
+
+    >&2 log 1 'Done\n'
 }
 
 
