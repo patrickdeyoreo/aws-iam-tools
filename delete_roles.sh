@@ -411,6 +411,7 @@ remove_role_from_instance_profiles()
             then
                 >&2 log 1 '*** Failed to back up role mapping to instance profile %s\n' "${instance_profile}"
                 >&4 log 0 'Failed to back up role mapping from role %s to instance profile %s\n' "$1" "${instance_profile}"
+
                 return 1
             fi
         fi
@@ -424,6 +425,7 @@ remove_role_from_instance_profiles()
         else
             >&2 log 1 '*** Failed to remove role from instance profile %s\n' "${instance_profile}"
             >&4 log 0 'Failed to remove role %s from instance profile %s\n' "$1" "${instance_profile}"
+
             return 1
         fi
 
@@ -443,6 +445,7 @@ remove_role_from_instance_profiles()
             then
                 >&2 log 1 '*** Failed to back up instance profile %s\n' "${instance_profile}"
                 >&4 log 0 'Failed to back up instance profile %s\n' "${instance_profile}"
+
                 return 1
             fi
         fi
@@ -456,6 +459,7 @@ remove_role_from_instance_profiles()
         else
             >&2 log 1 '*** Failed to delete instance profile %s\n' "${instance_profile}"
             >&4 log 0 'Failed to delete instance profile %s\n' "${instance_profile}"
+
             return 1
         fi
 
@@ -488,6 +492,7 @@ delete_inline_role_policies()
             then
                 >&2 log 1 '*** Failed to back up inline policy %s\n' "${policy}"
                 >&4 log 0 'Failed to back up inline policy %s of role %s\n' "${policy}" "$1"
+
                 return 1
             fi
         fi
@@ -501,6 +506,7 @@ delete_inline_role_policies()
         else
             >&2 log 1 '*** Failed to delete inline policy %s\n' "${policy}"
             >&4 log 0 'Failed to delete inline policy %s from role %s\n' "${policy}" "$1"
+
             return 1
         fi
 
@@ -529,6 +535,7 @@ detach_managed_role_policies()
             then
                 >&2 log 1 '*** Failed to back up attachment of managed policy %s\n' "${policy}"
                 >&4 log 0 'Failed to back up attachment of managed policy %s to role %s\n' "${policy}" "$1"
+
                 return 1
             fi
         fi
@@ -542,6 +549,7 @@ detach_managed_role_policies()
         else
             >&2 log 1 '*** Failed to detach managed policy %s\n' "${policy}"
             >&4 log 0 'Failed to detach managed policy %s from role %s\n' "${policy}" "$1"
+
             return 1
         fi
 
@@ -568,6 +576,7 @@ delete_role()
         then
             >&2 log 1 '*** Failed to back up role %s\n' "$1"
             >&4 log 0 'Failed to back up role %s\n' "$1"
+
             return 1
         fi
     fi
@@ -581,6 +590,7 @@ delete_role()
     else
         >&2 log 1 '*** Failed to delete role %s\n' "$1"
         >&4 log 0 'Failed to delete role %s\n' "$1"
+
         return 1
     fi
 }
@@ -598,6 +608,7 @@ restore_instance_profiles()
     if ! test -d "${instance_profile_backup_dir}"
     then
         >&2 log 1 '*** No instance profile backup directory %s\n' "${instance_profile_backup_dir}"
+
         return 1
     fi
 
@@ -610,25 +621,25 @@ restore_instance_profiles()
             instance_profile_name="${data_file##*/}"
             instance_profile_name="${instance_profile_name%.json}"
 
-            >&2 log 1 '==> Creating instance profile %s\n' "${instance_profile_name}"
-
-            if instance_profile_exists "${instance_profile_name}"
+            if ! instance_profile_exists "${instance_profile_name}"
             then
-                >&2 log 1 '*** Instance profile %s already exists - continuing\n' "${instance_profile_name}"
-                >&4 log 0 'Instance profile %s already exists - continuing\n' "${instance_profile_name}"
-                continue
-            fi
+                >&2 log 1 '==> Creating instance profile %s\n' "${instance_profile_name}"
 
-            if "${aws_cmd[@]}" iam create-instance-profile \
-                --instance-profile-name "${instance_profile_name}" \
-                --cli-input-json "$(< "${data_file}")" \
-                > /dev/null
-            then
-                >&4 log 0 'Created instance profile %s\n' "${instance_profile_name}"
+                if "${aws_cmd[@]}" iam create-instance-profile \
+                    --instance-profile-name "${instance_profile_name}" \
+                    --cli-input-json "$(< "${data_file}")" \
+                    > /dev/null
+                then
+                    >&4 log 0 'Created instance profile %s\n' "${instance_profile_name}"
+                else
+                    >&2 log 1 '*** Failed to create instance profile %s\n' "${instance_profile}"
+                    >&4 log 0 'Failed to create instance profile %s\n' "${instance_profile}"
+
+                    return 1
+                fi
             else
-                >&2 log 1 '*** Failed to create instance profile %s\n' "${instance_profile}"
-                >&4 log 0 'Failed to create instance profile %s\n' "${instance_profile}"
-                return 1
+                >&2 log 1 '*** Instance profile %s already exists - continuing\n' "${instance_profile_name}"
+                >&4 log 0 'Instance profile %s already exists\n' "${instance_profile_name}"
             fi
         fi
     done
@@ -650,6 +661,7 @@ restore_instance_profiles()
             else
                 >&2 log 1 '*** Failed to add role to instance profile %s\n' "${instance_profile}"
                 >&4 log 0 'Failed to add role %s to instance profile %s\n' "$1" "${instance_profile}"
+
                 return 1
             fi
         done 3< "${instance_profile_backup_dir}/instance_profiles.txt"
@@ -668,6 +680,7 @@ restore_managed_role_policies()
     if ! test -d "${managed_policy_backup_dir}"
     then
         >&2 log 1 '*** No managed policy backup directory %s\n' "${managed_policy_backup_dir}"
+
         return 1
     fi
 
@@ -688,6 +701,7 @@ restore_managed_role_policies()
             else
                 >&2 log 1 '*** Failed to attach managed policy %s\n' "${policy_arn}"
                 >&4 log 0 'Failed to attach managed policy %s to role %s\n' "${policy_arn}" "$1"
+
                 return 1
             fi
         done 3< "${managed_policy_backup_dir}/managed_policies.txt"
@@ -707,6 +721,7 @@ restore_inline_role_policies()
     if ! test -d "${inline_policy_backup_dir}"
     then
         >&2 log 1 '*** No inline policy backup directory %s\n' "${inline_policy_backup_dir}"
+
         return 1
     fi
 
@@ -732,6 +747,7 @@ restore_inline_role_policies()
             else
                 >&2 log 1 '*** Failed to create inline policy %s\n' "${policy_name}"
                 >&4 log 0 'Failed to create inline policy %s on role %s\n' "${policy_name}" "$1"
+
                 return 1
             fi
         fi
@@ -744,32 +760,33 @@ restore_inline_role_policies()
 ################
 restore_role()
 {
-    if role_exists "$1"
+    if ! role_exists "$1"
     then
+        if ! test -f "$2/role.json"
+        then
+            >&2 log 1 '*** No role backup file %s\n' "$2/role.json"
+
+            return 1
+        fi
+
+        >&2 log 1 '==> Creating role %s\n' "$1"
+
+        if "${aws_cmd[@]}" iam create-role \
+            --role-name "$1" \
+            --assume-role-policy-document "$(jq ".AssumeRolePolicyDocument" < "$2/role.json")" \
+            --cli-input-json "$(< "$2/role.json")" \
+            > /dev/null
+        then
+            >&4 log 0 'Created role %s\n' "$1"
+        else
+            >&2 log 1 '*** Failed to create role\n'
+            >&4 log 0 'Failed to create role %s\n' "$1"
+
+            return 1
+        fi
+    else
         >&2 log 1 '*** Role %s already exists - continuing\n' "$1"
         >&4 log 0 'Role %s already exists\n' "$1"
-        return 0
-    fi
-
-    if ! test -f "$2/role.json"
-    then
-        >&2 log 1 '*** No role backup file %s\n' "$2/role.json"
-        return 1
-    fi
-
-    >&2 log 1 '==> Creating role %s\n' "$1"
-
-    if "${aws_cmd[@]}" iam create-role \
-        --role-name "$1" \
-        --assume-role-policy-document "$(jq ".AssumeRolePolicyDocument" < "$2/role.json")" \
-        --cli-input-json "$(< "$2/role.json")" \
-        > /dev/null
-    then
-        >&4 log 0 'Created role %s\n' "$1"
-    else
-        >&2 log 1 '*** Failed to create role\n'
-        >&4 log 0 'Failed to create role %s\n' "$1"
-        return 1
     fi
 }
 
