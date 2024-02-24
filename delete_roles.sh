@@ -705,7 +705,6 @@ restore_inline_role_policies()
     if ! test -d "${inline_policy_backup_dir}"
     then
         >&2 log 1 '*** No inline policy backup directory %s\n' "${inline_policy_backup_dir}"
-
         return 1
     fi
 
@@ -750,7 +749,6 @@ restore_role()
         if ! test -f "$2/role.json"
         then
             >&2 log 1 '*** No role backup file %s\n' "$2/role.json"
-
             return 1
         fi
 
