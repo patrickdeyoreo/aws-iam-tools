@@ -7,7 +7,10 @@
 #        delete_roles restore [-h] [-c] DIRECTORY
 
 set -e
+
 exec 4>&1
+
+trap '>&2 echo; exit 130' SIGINT
 
 __progname__="${0##*/}"
 
@@ -746,7 +749,7 @@ restore_role()
             return 1
         fi
 
-        assume_role_policy_document="$(jq '.[]|select(.RoleName == "'"$1"'").AssumeRolePolicyDocument' < "${backup_root}/roles.json")"
+        assume_role_policy_document="$(jq '.[]|select(.RoleName == "'"$1"'").AssumeRolePolicyDocument' < "$3")"
 
         # Create role
         >&2 log 1 '==> Creating role %s\n' "$1"
@@ -785,7 +788,7 @@ destroy()
     while
         if test -n "${line}"
         then
-            sleep 0.34
+            sleep 0.25
             >&2 echo
         fi
         read -r -u 3 line
@@ -888,8 +891,6 @@ destroy()
         fi
 
     done 3< <(cat -- "$@")
-
-    >&2 log 1 'Done\n'
 }
 
 
@@ -898,9 +899,8 @@ destroy()
 ################
 restore()
 {
-    local backup_root="$1"
     local backup_path
-    local role
+    local role=""
 
     # Check if the backup directory and role list exist
     if ! test -d "$1"
@@ -926,7 +926,7 @@ restore()
 
         if test -n "${role}"
         then
-            sleep 0.34
+            sleep 0.25
             >&2 echo
         fi
         >&2 log 1 '> %s\n' "${backup_path}"
@@ -946,7 +946,7 @@ restore()
         # Restore role
         >&2 log 0 'Restoring role %s\n' "${role}"
         if
-            restore_role                  "${role}" "${backup_path}" &&
+            restore_role                  "${role}" "${backup_path}" "$1/roles.json" &&
             restore_inline_role_policies  "${role}" "${backup_path}/inline_policies" &&
             restore_managed_role_policies "${role}" "${backup_path}/managed_policies" &&
             restore_instance_profiles     "${role}" "${backup_path}/instance_profiles"
@@ -956,8 +956,6 @@ restore()
             >&2 log 0 'Failure restoring role %s\n' "${role}"
         fi
     done
-
-    >&2 log 1 'Done\n'
 }
 
 
