@@ -336,7 +336,7 @@ create_new_backup_dir()
         do
             bkp_num+=1
         done
-        >&2 log 1 '* Renaming existing backup directory %s to %s\n' "${backup_dir}" "${backup_dir}.${bkp_num}"
+        >&2 log 1 'Renaming existing backup directory %s to %s\n' "${backup_dir}" "${backup_dir}.${bkp_num}"
 
         if ! mv -- "${backup_dir}" "${backup_dir}.${bkp_num}"
         then
@@ -346,11 +346,20 @@ create_new_backup_dir()
     fi
 
     # Create new backup directory
-    >&2 log 1 '* Creating new backup directory %s\n' "${backup_dir}"
+    >&2 log 1 'Creating new backup directory %s\n' "${backup_dir}"
 
     if ! mkdir -p -- "${backup_dir}"
     then
         >&2 log 0 '%s: %s: could not create new backup directory\n' "${__progname__}" "${backup_dir}"
+        exit 1
+    fi
+
+    # Back up a list of existing roles
+    >&2 log 1 'Backing up a list of existing roles to %s\n' "${backup_dir}/roles.json"
+
+    if ! "${aws_cmd[@]}" iam list-roles --query 'Roles[*].{RoleName: RoleName, RoleId: RoleId, AssumeRolePolicyDocument: AssumeRolePolicyDocument}' > "${backup_dir}/roles.json"
+    then
+        >&2 log 0 '%s: %s: failed to back up list of existing roles\n' "${__progname__}" "${backup_dir}/roles.json"
         exit 1
     fi
 
@@ -392,7 +401,6 @@ instance_profile_exists()
 remove_role_from_instance_profiles()
 {
     local instance_profile
-    local instance_profile_backup_dir="$2/instance_profiles"
 
     # Iterate over instance profiles
     while read -r -u 3 instance_profile
@@ -400,7 +408,7 @@ remove_role_from_instance_profiles()
         # Backup instance profile mapping
         if ((backups))
         then
-            if ! echo -E "${instance_profile}" >> "${instance_profile_backup_dir}/instance_profiles.txt"
+            if ! echo -E "${instance_profile}" >> "$2/instance_profiles.txt"
             then
                 >&2 log 1 '*** Failed to back up role mapping to instance profile %s\n' "${instance_profile}"
                 >&4 log 0 'Failed to back up role mapping from role %s to instance profile %s\n' "$1" "${instance_profile}"
@@ -428,10 +436,10 @@ remove_role_from_instance_profiles()
         # Backup instance profile
         if ((backups))
         then
-            >&2 log 1 '==> Backing up instance profile to %s\n' "${instance_profile_backup_dir}/${instance_profile}.json"
+            >&2 log 1 '==> Backing up instance profile to %s\n' "$2/${instance_profile}.json"
             if ! {
                 "${aws_cmd[@]}" iam get-instance-profile --instance-profile-name "${instance_profile}" --query 'InstanceProfile' |
-                jq 'with_entries(select(.key == ("Path", "Tags")))' >> "${instance_profile_backup_dir}/${instance_profile}.json"
+                jq 'with_entries(select(.key == ("Path", "Tags")))' > "$2/${instance_profile}.json"
             }
             then
                 >&2 log 1 '*** Failed to back up instance profile %s\n' "${instance_profile}"
@@ -460,12 +468,51 @@ remove_role_from_instance_profiles()
 
 
 ################
+# Detach managed role policies
+################
+detach_managed_role_policies()
+{
+    local policy
+
+    # Iterate over managed role policies
+    while read -r -u 3 policy
+    do
+        # Backup managed policy attachment
+        if ((backups))
+        then
+            if ! echo -E "${policy}" >> "$2/managed_policies.txt"
+            then
+                >&2 log 1 '*** Failed to back up attachment of managed policy %s\n' "${policy}"
+                >&4 log 0 'Failed to back up attachment of managed policy %s to role %s\n' "${policy}" "$1"
+                return 1
+            fi
+        fi
+
+        # Detach managed policy
+        >&2 log 1 '==> Detaching managed policy %s\n' "${policy}"
+
+        if "${aws_cmd[@]}" iam detach-role-policy --role-name "$1" --policy-arn "${policy}" > /dev/null
+        then
+            >&4 log 0 'Detached managed policy %s from role %s\n' "${policy}" "$1"
+        else
+            >&2 log 1 '*** Failed to detach managed policy %s\n' "${policy}"
+            >&4 log 0 'Failed to detach managed policy %s from role %s\n' "${policy}" "$1"
+            return 1
+        fi
+
+    done 3< <(
+        "${aws_cmd[@]}" iam list-attached-role-policies --role-name "$1" --query 'AttachedPolicies[*].PolicyArn' |
+        jq --raw-output --compact-output '.[]'
+    )
+}
+
+
+################
 # Destroy inline role policies
 ################
 delete_inline_role_policies()
 {
     local policy
-    local inline_policy_backup_dir="$2/inline_policies"
 
     # Iterate over inline role policies
     while read -r -u 3 policy
@@ -473,10 +520,10 @@ delete_inline_role_policies()
         # Backup inline policy
         if ((backups))
         then
-            >&2 log 1 '==> Backing up inline policy to %s\n' "${inline_policy_backup_dir}/${policy}.json"
+            >&2 log 1 '==> Backing up inline policy to %s\n' "$2/${policy}.json"
             if ! {
                 "${aws_cmd[@]}" iam get-role-policy --role-name "$1" --policy-name "${policy}" |
-                jq 'with_entries(select(.key == ("PolicyDocument")))' >> "${inline_policy_backup_dir}/${policy}.json"
+                jq 'with_entries(select(.key == ("PolicyDocument")))' > "$2/${policy}.json"
             }
             then
                 >&2 log 1 '*** Failed to back up inline policy %s\n' "${policy}"
@@ -505,47 +552,6 @@ delete_inline_role_policies()
 
 
 ################
-# Detach managed role policies
-################
-detach_managed_role_policies()
-{
-    local policy
-    local managed_policy_backup_dir="$2/managed_policies"
-
-    # Iterate over managed role policies
-    while read -r -u 3 policy
-    do
-        # Backup managed policy attachment
-        if ((backups))
-        then
-            if ! echo -E "${policy}" >> "${managed_policy_backup_dir}/managed_policies.txt"
-            then
-                >&2 log 1 '*** Failed to back up attachment of managed policy %s\n' "${policy}"
-                >&4 log 0 'Failed to back up attachment of managed policy %s to role %s\n' "${policy}" "$1"
-                return 1
-            fi
-        fi
-
-        # Detach managed policy
-        >&2 log 1 '==> Detaching managed policy %s\n' "${policy}"
-
-        if "${aws_cmd[@]}" iam detach-role-policy --role-name "$1" --policy-arn "${policy}" > /dev/null
-        then
-            >&4 log 0 'Detached managed policy %s from role %s\n' "${policy}" "$1"
-        else
-            >&2 log 1 '*** Failed to detach managed policy %s\n' "${policy}"
-            >&4 log 0 'Failed to detach managed policy %s from role %s\n' "${policy}" "$1"
-            return 1
-        fi
-
-    done 3< <(
-        "${aws_cmd[@]}" iam list-attached-role-policies --role-name "$1" --query 'AttachedPolicies[*].PolicyArn' |
-        jq --raw-output --compact-output '.[]'
-    )
-}
-
-
-################
 # Destroy a role
 ################
 delete_role()
@@ -556,7 +562,7 @@ delete_role()
         >&2 log 1 '==> Backing up role to %s\n' "$2/role.json"
         if ! {
             "${aws_cmd[@]}" iam get-role --role-name "$1" --query "Role" |
-            jq 'with_entries(select(.key == ("Path", "RoleName", "AssumeRolePolicyDocument", "Description", "MaxSessionDuration", "PermissionsBoundary", "Tags")))' > "$2/role.json"
+            jq 'with_entries(select(.key == ("Path", "RoleName", "Description", "MaxSessionDuration", "PermissionsBoundary", "Tags")))' > "$2/role.json"
         }
         then
             >&2 log 1 '*** Failed to back up role %s\n' "$1"
@@ -586,19 +592,18 @@ restore_instance_profiles()
 {
     local data_file
     local instance_profile_name
-    local instance_profile_backup_dir="$2/instance_profiles"
 
     # Check if instance profile backup directory exists
-    if ! test -d "${instance_profile_backup_dir}"
+    if ! test -d "$2"
     then
-        >&2 log 1 '*** No instance profile backup directory %s\n' "${instance_profile_backup_dir}"
+        >&2 log 1 '*** No instance profile backup directory %s\n' "$2"
         return 1
     fi
 
     # Create instance profiles
     >&2 log 1 '==> Restoring instance profiles\n'
 
-    for data_file in "${instance_profile_backup_dir}"/*.json
+    for data_file in "$2"/*.json
     do
         if test -a "${data_file}"
         then
@@ -609,10 +614,7 @@ restore_instance_profiles()
             then
                 >&2 log 1 '==> Creating instance profile %s\n' "${instance_profile_name}"
 
-                if "${aws_cmd[@]}" iam create-instance-profile \
-                    --instance-profile-name "${instance_profile_name}" \
-                    --cli-input-json "$(< "${data_file}")" \
-                    > /dev/null
+                if "${aws_cmd[@]}" iam create-instance-profile --instance-profile-name "${instance_profile_name}" --cli-input-json "$(< "${data_file}")" > /dev/null
                 then
                     >&4 log 0 'Created instance profile %s\n' "${instance_profile_name}"
                 else
@@ -630,16 +632,13 @@ restore_instance_profiles()
     # Restore instance profile mappings
     >&2 log 1 '==> Adding role to instance profiles\n'
 
-    if test -a "${instance_profile_backup_dir}/instance_profiles.txt"
+    if test -a "$2/instance_profiles.txt"
     then
         while read -r -u 3 instance_profile_name
         do
             >&2 log 1 '==> Adding role to instance profile %s\n' "${instance_profile_name}"
 
-            if "${aws_cmd[@]}" iam add-role-to-instance-profile \
-                --instance-profile-name "${instance_profile_name}" \
-                --role-name "$1" \
-                > /dev/null
+            if "${aws_cmd[@]}" iam add-role-to-instance-profile --instance-profile-name "${instance_profile_name}" --role-name "$1" > /dev/null
             then
                 >&4 log 0 'Added role %s to instance profile %s\n' "$1" "${instance_profile_name}"
             else
@@ -647,7 +646,7 @@ restore_instance_profiles()
                 >&4 log 0 'Failed to add role %s to instance profile %s\n' "$1" "${instance_profile}"
                 return 1
             fi
-        done 3< "${instance_profile_backup_dir}/instance_profiles.txt"
+        done 3< "$2/instance_profiles.txt"
     fi
 }
 
@@ -658,28 +657,24 @@ restore_instance_profiles()
 restore_managed_role_policies()
 {
     local policy_arn
-    local managed_policy_backup_dir="$2/managed_policies"
 
     # Check if managed policy backup directory exists
-    if ! test -d "${managed_policy_backup_dir}"
+    if ! test -d "$2"
     then
-        >&2 log 1 '*** No managed policy backup directory %s\n' "${managed_policy_backup_dir}"
+        >&2 log 1 '*** No managed policy backup directory %s\n' "$2"
         return 1
     fi
 
     # Attach managed policies
     >&2 log 1 '==> Restoring managed policy attachments\n'
 
-    if test -a "${managed_policy_backup_dir}/managed_policies.txt"
+    if test -a "$2/managed_policies.txt"
     then
         while read -r -u 3 policy_arn
         do
             >&2 log 1 '==> Attaching managed policy %s\n' "${policy_arn}"
 
-            if "${aws_cmd[@]}" iam attach-role-policy \
-                --role-name "$1" \
-                --policy-arn "${policy_arn}" \
-                > /dev/null
+            if "${aws_cmd[@]}" iam attach-role-policy --role-name "$1" --policy-arn "${policy_arn}" > /dev/null
             then
                 >&4 log 0 'Attached managed policy %s to role %s\n' "${policy_arn}" "$1"
             else
@@ -687,7 +682,7 @@ restore_managed_role_policies()
                 >&4 log 0 'Failed to attach managed policy %s to role %s\n' "${policy_arn}" "$1"
                 return 1
             fi
-        done 3< "${managed_policy_backup_dir}/managed_policies.txt"
+        done 3< "$2/managed_policies.txt"
     fi
 }
 
@@ -699,33 +694,30 @@ restore_inline_role_policies()
 {
     local data_file
     local policy_name
-    local inline_policy_backup_dir="$2/inline_policies"
+    local policy_document
 
     # Check if inline policy backup directory exists
-    if ! test -d "${inline_policy_backup_dir}"
+    if ! test -d "$2"
     then
-        >&2 log 1 '*** No inline policy backup directory %s\n' "${inline_policy_backup_dir}"
+        >&2 log 1 '*** No inline policy backup directory %s\n' "$2"
         return 1
     fi
 
     # Create inline policies
     >&2 log 1 '==> Restoring inline policies\n'
 
-    for data_file in "${inline_policy_backup_dir}"/*.json
+    for data_file in "$2"/*.json
     do
         if test -a "${data_file}"
         then
             policy_name="${data_file##*/}"
             policy_name="${policy_name%.json}"
 
+            policy_document="$(jq ".PolicyDocument" < "${data_file}")"
+
             >&2 log 1 '==> Creating inline policy %s\n' "${policy_name}"
 
-            if "${aws_cmd[@]}" iam put-role-policy \
-                --role-name "$1" \
-                --policy-name "${policy_name}" \
-                --policy-document "$(jq ".PolicyDocument" < "${data_file}")" \
-                --cli-input-json "$(< "${data_file}")" \
-                > /dev/null
+            if "${aws_cmd[@]}" iam put-role-policy --role-name "$1" --policy-name "${policy_name}" --policy-document "${policy_document}" --cli-input-json "$(< "${data_file}")" > /dev/null
             then
                 >&4 log 0 'Created inline policy %s on role %s\n' "${policy_name}" "$1"
             else
@@ -743,6 +735,8 @@ restore_inline_role_policies()
 ################
 restore_role()
 {
+    local assume_role_policy_document
+
     if ! role_exists "$1"
     then
         # Check if role backup file exists
@@ -752,14 +746,12 @@ restore_role()
             return 1
         fi
 
+        assume_role_policy_document="$(jq '.[]|select(.RoleName == "'"$1"'").AssumeRolePolicyDocument' < "${backup_root}/roles.json")"
+
         # Create role
         >&2 log 1 '==> Creating role %s\n' "$1"
 
-        if "${aws_cmd[@]}" iam create-role \
-            --role-name "$1" \
-            --assume-role-policy-document "$(jq ".AssumeRolePolicyDocument" < "$2/role.json")" \
-            --cli-input-json "$(< "$2/role.json")" \
-            > /dev/null
+        if "${aws_cmd[@]}" iam create-role --role-name "$1" --assume-role-policy-document  "${assume_role_policy_document}" --cli-input-json "$(< "$2/role.json")" > /dev/null
         then
             >&4 log 0 'Created role %s\n' "$1"
         else
@@ -870,14 +862,14 @@ destroy()
                 >&2 log 0 '* Failed to create instance profile backup directory %s\n' "${__progname__}" "${backup_dir}/instance_profiles"
                 continue
             fi
-            if ! mkdir -- "${backup_dir}/${role}/inline_policies"
-            then
-                >&2 log 0 '* Failed to create inline policy backup directory %s\n' "${__progname__}" "${backup_dir}/inline_policies"
-                continue
-            fi
             if ! mkdir -- "${backup_dir}/${role}/managed_policies"
             then
                 >&2 log 0 'Failed to create managed policy backup directory%s \n' "${__progname__}" "${backup_dir}/managed_policies"
+                continue
+            fi
+            if ! mkdir -- "${backup_dir}/${role}/inline_policies"
+            then
+                >&2 log 0 '* Failed to create inline policy backup directory %s\n' "${__progname__}" "${backup_dir}/inline_policies"
                 continue
             fi
         fi
@@ -885,12 +877,13 @@ destroy()
         # Destroy role
         >&2 log 0 'Destroying role %s\n' "${role}"
         if
-            remove_role_from_instance_profiles "${role}" "${backup_dir}/${role}" &&
-            delete_inline_role_policies        "${role}" "${backup_dir}/${role}" &&
-            detach_managed_role_policies       "${role}" "${backup_dir}/${role}" &&
+            remove_role_from_instance_profiles "${role}" "${backup_dir}/${role}/instance_profiles" &&
+            detach_managed_role_policies       "${role}" "${backup_dir}/${role}/managed_policies" &&
+            delete_inline_role_policies        "${role}" "${backup_dir}/${role}/inline_policies" &&
             delete_role                        "${role}" "${backup_dir}/${role}"
         then
             >&2 log 0 'Success destroying role %s\n' "${role}"
+        else
             >&2 log 0 'Failure destroying role %s\n' "${role}"
         fi
 
@@ -905,52 +898,62 @@ destroy()
 ################
 restore()
 {
-    local role
+    local backup_root="$1"
     local backup_path
+    local role
 
-    # Check if the backup directory exists
+    # Check if the backup directory and role list exist
     if ! test -d "$1"
     then
         >&2 log 0 '%s: %s: no such directory\n' "${__progname__}" "$1"
         exit 1
     fi
+    if ! test -f "$1/roles.json"
+    then
+        >&2 log 0 '%s: %s: missing required file\n' "${__progname__}" "$1/roles.json"
+        exit 1
+    fi
+    if ! test -r "$1/roles.json"
+    then
+        >&2 log 0 '%s: %s: insufficient permissions\n' "${__progname__}" "$1/roles.json"
+        exit 1
+    fi
 
     # Iterate over backup subdirectories (i.e. roles)
-    for backup_path in "$1"/*
+    for backup_path in "$1"/*/
     do
-        if test -d "${backup_path}/"
+        backup_path="${backup_path%/}"
+
+        if test -n "${role}"
         then
-            if test -n "${role}"
-            then
-                sleep 0.34
-                >&2 echo
-            fi
-            >&2 log 1 '> %s\n' "${backup_path}"
+            sleep 0.34
+            >&2 echo
+        fi
+        >&2 log 1 '> %s\n' "${backup_path}"
 
-            role="${backup_path##*/}"
+        role="${backup_path##*/}"
 
-            if ((dry_run))
-            then
-                >&4 log 0 'Would restore role %s\n' "${role}"
-                continue
-            fi
-            if ((confirm)) && ! confirm "Restore role ${role}?"
-            then
-                continue
-            fi
+        if ((dry_run))
+        then
+            >&4 log 0 'Would restore role %s\n' "${role}"
+            continue
+        fi
+        if ((confirm)) && ! confirm "Restore role ${role}?"
+        then
+            continue
+        fi
 
-            # Restore role
-            >&2 log 0 'Restoring role %s\n' "${role}"
-            if
-                restore_role                  "${role}" "${backup_path}" &&
-                restore_inline_role_policies  "${role}" "${backup_path}" &&
-                restore_managed_role_policies "${role}" "${backup_path}" &&
-                restore_instance_profiles     "${role}" "${backup_path}"
-            then
-                >&2 log 0 'Success restoring role %s\n' "${role}"
-            else
-                >&2 log 0 'Failure restoring role %s\n' "${role}"
-            fi
+        # Restore role
+        >&2 log 0 'Restoring role %s\n' "${role}"
+        if
+            restore_role                  "${role}" "${backup_path}" &&
+            restore_inline_role_policies  "${role}" "${backup_path}/inline_policies" &&
+            restore_managed_role_policies "${role}" "${backup_path}/managed_policies" &&
+            restore_instance_profiles     "${role}" "${backup_path}/instance_profiles"
+        then
+            >&2 log 0 'Success restoring role %s\n' "${role}"
+        else
+            >&2 log 0 'Failure restoring role %s\n' "${role}"
         fi
     done
 
