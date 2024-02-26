@@ -3,7 +3,7 @@
 # Destroy and restore IAM roles.
 #
 # usage: delete_roles         [-h] [-n] [-v] [-o OUTPUT] [-p PROFILE] SUBCOMMAND
-#        delete_roles destroy [-h] [-a] [-c] [-i] [-b DIRNAME] [-x PATTERN] FILE ...
+#        delete_roles destroy [-h] [-c] [-a] [-i] [-b DIRNAME] [-x PATTERN] FILE ...
 #        delete_roles restore [-h] [-c] DIRECTORY
 
 set -e
@@ -38,7 +38,7 @@ optional arguments:
   -h            Show this help message and exit"
 
 __destroy_optstr__=":hacib:x:"
-__destroy_usage__="${__progname__} [OPTIONS] destroy [-h] [-a] [-c] [-i] [-b DIRNAME] [-x PATTERN] FILE ..."
+__destroy_usage__="${__progname__} [OPTIONS] destroy [-h] [-c] [-a] [-i] [-b DIRNAME] [-x PATTERN] FILE ..."
 
 __destroy_help__="usage: ${__destroy_usage__}
 
@@ -73,7 +73,7 @@ optional arguments:
 
 
 ################
-# Print if verbosity is at or above given level
+# Print if verbosity is at or above given level.
 #
 # usage: log LEVEL ARGS...
 ################
@@ -93,7 +93,7 @@ log()
 
 
 ################
-# Confirm yes or no
+# Confirm yes or no.
 #
 # usage: confirm
 ################
@@ -119,7 +119,7 @@ confirm()
 
 
 ################
-# Check if a subcommand is recognized
+# Check if a subcommand is recognized.
 #
 # usage: is_subcommand SUBCOMMAND
 ################
@@ -139,7 +139,7 @@ is_subcommand()
 
 
 ################
-# Print a helpful message
+# Print a helpful message.
 #
 # usage: help [SUBCOMMAND]
 ################
@@ -161,7 +161,7 @@ function help()
 
 
 ################
-# Print a usage message
+# Print a usage message.
 #
 # usage: usage [SUBCOMMAND]
 ################
@@ -183,7 +183,7 @@ usage()
 
 
 ################
-# Parse commandline options
+# Parse commandline options.
 #
 # usage: parse_opts
 ################
@@ -247,7 +247,7 @@ parse_opts()
 
 
 ################
-# Parse ``destroy'' commandline options
+# Parse ``destroy'' subcommand options.
 #
 # usage: __parse_opts_destroy
 ################
@@ -301,7 +301,7 @@ __parse_opts_destroy()
 
 
 ################
-# Parse ``restore'' commandline options
+# Parse ``restore'' subcommand options.
 #
 # usage: __parse_opts_restore
 ################
@@ -342,7 +342,7 @@ __parse_opts_restore()
 
 
 ################
-# Create a new backup directory, renaming any existing directory
+# Create a new backup directory, renaming any existing directory.
 #
 # usage: create_backup_dir DIRECTORY
 ################
@@ -387,7 +387,7 @@ create_backup_dir()
 
 
 ################
-# Check for required top-level contents of backup directory
+# Check for required top-level contents of backup directory.
 #
 # usage: check_backup_dir DIRECTORY
 ################
@@ -412,7 +412,7 @@ check_backup_dir()
     fi
 
     # Check for global roles backup file
-    >&2 log 2 'Checking for global roles backup file %s\n' "$1/roles.json"
+    >&2 log 1 'Checking for global roles backup file %s\n' "$1/roles.json"
 
     if ! test -f "$1/roles.json"
     then
@@ -421,7 +421,7 @@ check_backup_dir()
     fi
 
     # Check permissions on global roles backup file
-    >&2 log 1 'Checking permissions on global roles backup file %s\n' "$1/roles.json"
+    >&2 log 2 'Checking permissions on global roles backup file %s\n' "$1/roles.json"
 
     if ! test -r "$1/roles.json"
     then
@@ -432,7 +432,7 @@ check_backup_dir()
 
 
 ################
-# Check if a role exists
+# Check if a role exists.
 #
 # usage: role_exists ROLE_NAME
 ################
@@ -448,7 +448,7 @@ role_exists()
 
 
 ################
-# Check if an instance profile exists
+# Check if an instance profile exists.
 #
 # usage: instance_profile_exists INSTANCE_PROFILE_NAME
 ################
@@ -464,7 +464,7 @@ instance_profile_exists()
 
 
 ################
-# Remove role from instance profile
+# Remove role from instance profile.
 #
 # usage: remove_role_from_instance_profiles ROLE_NAME INSTANCE_PROFILE_BACKUP_DIR
 ################
@@ -538,7 +538,7 @@ remove_role_from_instance_profiles()
 
 
 ################
-# Detach managed role policies
+# Detach managed role policies.
 #
 # usage: detach_managed_role_policies ROLE_NAME MANAGED_POLICY_BACKUP_DIR
 ################
@@ -580,7 +580,7 @@ detach_managed_role_policies()
 
 
 ################
-# Destroy inline role policies
+# Destroy inline role policies.
 #
 # usage: delete_inline_role_policies ROLE_NAME INLINE_POLICY_BACKUP_DIR
 ################
@@ -626,7 +626,7 @@ delete_inline_role_policies()
 
 
 ################
-# Destroy a role
+# Destroy a role.
 #
 # usage: delete_role ROLE_NAME ROLE_BACKUP_DIR
 ################
@@ -662,7 +662,7 @@ delete_role()
 
 
 ################
-# Restore instance profiles
+# Restore instance profiles.
 #
 # usage: restore_instance_profiles ROLE_NAME INSTANCE_PROFILE_BACKUP_DIR
 ################
@@ -733,7 +733,7 @@ restore_instance_profiles()
 
 
 ################
-# Restore managed role policies
+# Restore managed role policies.
 #
 # usage: restore_managed_role_policies ROLE_NAME MANAGED_POLICY_BACKUP_DIR
 ################
@@ -773,7 +773,7 @@ restore_managed_role_policies()
 
 
 ################
-# Restore inline role policies
+# Restore inline role policies.
 #
 # usage: restore_inline_role_policies ROLE_NAME INLINE_POLICY_BACKUP_DIR
 ################
@@ -826,8 +826,9 @@ restore_inline_role_policies()
 
 
 ################
-# Restore a role
-# usage: restore_role ROLE_NAME ROLE_BACKUP_DIR GLOBAL_ROLES_BACKUP_FILE
+# Restore a role.
+#
+# usage: restore_role ROLE_NAME ROLE_BACKUP_DIR BACKUP_ROOT
 ################
 restore_role()
 {
@@ -844,10 +845,10 @@ restore_role()
         fi
 
         # Get trust policy from global roles backup file
-        if ! assume_role_policy_document="$(jq --exit-status --arg role_name "$1" '.[]|select(.RoleName == $role_name).AssumeRolePolicyDocument' < "$3")"
+        if ! assume_role_policy_document="$(jq --exit-status --arg role_name "$1" '.[]|select(.RoleName == $role_name).AssumeRolePolicyDocument' < "$3/roles.json")"
         then
-            >&2 log 1 '*** No attribute AssumeRolePolicyDocument for role %s in global roles backup file %s\n' "$1" "$3"
-            >&4 log 0 'No attribute AssumeRolePolicyDocument for role %s in global roles backup file %s\n' "$1" "$3"
+            >&2 log 1 '*** No attribute AssumeRolePolicyDocument for role %s in global roles backup file %s\n' "$1" "$3/roles.json"
+            >&4 log 0 'No attribute AssumeRolePolicyDocument for role %s in global roles backup file %s\n' "$1" "$3/roles.json"
             return 1
         fi
 
@@ -870,7 +871,8 @@ restore_role()
 
 
 ################
-# Destroy roles read line-by-line from files
+# Destroy roles read line-by-line from files.
+#
 # usage: destroy SOURCE_FILE ...
 ################
 destroy()
@@ -999,7 +1001,8 @@ destroy()
 
 
 ################
-# Restore deleted roles from a backup directory
+# Restore deleted roles from a backup directory.
+#
 # usage: restore SOURCE_DIRECTORY
 ################
 restore()
@@ -1038,7 +1041,7 @@ restore()
         # Restore role
         >&2 log 0 'Restoring role %s\n' "${role}"
         if
-            restore_role                  "${role}" "${backup_path}" "$1/roles.json" &&
+            restore_role                  "${role}" "${backup_path}" "$1" &&
             restore_inline_role_policies  "${role}" "${backup_path}/inline_policies" &&
             restore_managed_role_policies "${role}" "${backup_path}/managed_policies" &&
             restore_instance_profiles     "${role}" "${backup_path}/instance_profiles"
@@ -1052,7 +1055,7 @@ restore()
 
 
 ################
-# Parse options and execute role operation
+# Parse options and execute role operation.
 #
 # usage: main ARGS ...
 ################
