@@ -74,6 +74,8 @@ optional arguments:
 
 ################
 # Print if verbosity is at or above given level
+#
+# usage: log LEVEL ARGS...
 ################
 log()
 {
@@ -92,6 +94,8 @@ log()
 
 ################
 # Confirm yes or no
+#
+# usage: confirm
 ################
 confirm()
 {
@@ -116,6 +120,8 @@ confirm()
 
 ################
 # Check if a subcommand is recognized
+#
+# usage: is_subcommand SUBCOMMAND
 ################
 is_subcommand()
 {
@@ -134,12 +140,14 @@ is_subcommand()
 
 ################
 # Print a helpful message
+#
+# usage: help [SUBCOMMAND]
 ################
 function help()
 {
     local help_name=""
 
-    if (($# == 0))
+    if ! (($#))
     then
         log 0 '%s\n' "${__global_help__}"
     elif is_subcommand "$1"
@@ -154,12 +162,14 @@ function help()
 
 ################
 # Print a usage message
+#
+# usage: usage [SUBCOMMAND]
 ################
 usage()
 {
     local usage_name=""
 
-    if (($# == 0))
+    if ! (($#))
     then
         log 0 'usage: %s\n' "${__global_usage__}"
     elif is_subcommand "$1"
@@ -174,6 +184,8 @@ usage()
 
 ################
 # Parse commandline options
+#
+# usage: parse_opts
 ################
 parse_opts()
 {
@@ -236,6 +248,8 @@ parse_opts()
 
 ################
 # Parse ``destroy'' commandline options
+#
+# usage: __parse_opts_destroy
 ################
 __parse_opts_destroy()
 {
@@ -288,6 +302,8 @@ __parse_opts_destroy()
 
 ################
 # Parse ``restore'' commandline options
+#
+# usage: __parse_opts_restore
 ################
 __parse_opts_restore()
 {
@@ -327,51 +343,98 @@ __parse_opts_restore()
 
 ################
 # Create a new backup directory, renaming any existing directory
+#
+# usage: create_backup_dir DIRECTORY
 ################
-create_new_backup_dir()
+create_backup_dir()
 {
     local -i bkp_num=1
 
     # Rename existing backup directory
-    if test -d "${backup_dir}"
+    if test -d "$1"
     then
-        while test -a "${backup_dir}.${bkp_num}"
+        while test -a "$1.${bkp_num}"
         do
             bkp_num+=1
         done
-        >&2 log 1 'Renaming existing backup directory %s to %s\n' "${backup_dir}" "${backup_dir}.${bkp_num}"
+        >&2 log 1 'Renaming existing backup directory %s to %s\n' "$1" "$1.${bkp_num}"
 
-        if ! mv -- "${backup_dir}" "${backup_dir}.${bkp_num}"
+        if ! mv -- "$1" "$1.${bkp_num}"
         then
-            >&2 log 0 '%s: %s: could not rename existing backup directory\n' "${__progname__}" "${backup_dir}"
+            >&2 log 0 '%s: %s: could not rename existing backup directory\n' "${__progname__}" "$1"
             exit 1
         fi
     fi
 
     # Create new backup directory
-    >&2 log 1 'Creating new backup directory %s\n' "${backup_dir}"
+    >&2 log 1 'Creating new backup directory %s\n' "$1"
 
-    if ! mkdir -p -- "${backup_dir}"
+    if ! mkdir -p -- "$1"
     then
-        >&2 log 0 '%s: %s: could not create new backup directory\n' "${__progname__}" "${backup_dir}"
+        >&2 log 0 '%s: %s: could not create new backup directory\n' "${__progname__}" "$1"
         exit 1
     fi
 
     # Back up list of existing roles
-    >&2 log 1 'Backing up list of existing roles to %s\n' "${backup_dir}/roles.json"
+    >&2 log 1 'Backing up list of existing roles to %s\n' "$1/roles.json"
 
-    if ! "${aws_cmd[@]}" iam list-roles --query 'Roles[*].{RoleName: RoleName, RoleId: RoleId, AssumeRolePolicyDocument: AssumeRolePolicyDocument}' > "${backup_dir}/roles.json"
+    if ! "${aws_cmd[@]}" iam list-roles --query 'Roles[*].{RoleName: RoleName, RoleId: RoleId, AssumeRolePolicyDocument: AssumeRolePolicyDocument}' > "$1/roles.json"
     then
-        >&2 log 0 '%s: %s: failed to back up list of existing roles\n' "${__progname__}" "${backup_dir}/roles.json"
+        >&2 log 0 '%s: %s: failed to back up list of existing roles\n' "${__progname__}" "$1/roles.json"
+        exit 1
+    fi
+}
+
+
+################
+# Check for required top-level contents of backup directory
+#
+# usage: check_backup_dir DIRECTORY
+################
+check_backup_dir()
+{
+    # Check for backup directory
+    >&2 log 1 'Checking for backup directory %s\n' "$1"
+
+    if ! test -d "$1"
+    then
+        >&2 log 0 '%s: %s: no such directory\n' "${__progname__}" "$1"
         exit 1
     fi
 
-    >&2 log 1 '\n'
+    # Check permissions on backup directory
+    >&2 log 2 'Checking permissions on backup directory %s\n' "$1"
+
+    if ! { test -r "$1" && test -w "$1" && test -x "$1"; }
+    then
+        >&2 log 0 '%s: %s: insufficient permissions\n' "${__progname__}" "$1"
+        exit 1
+    fi
+
+    # Check for global roles backup file
+    >&2 log 2 'Checking for global roles backup file %s\n' "$1/roles.json"
+
+    if ! test -f "$1/roles.json"
+    then
+        >&2 log 0 '%s: %s: missing required file\n' "${__progname__}" "$1/roles.json"
+        exit 1
+    fi
+
+    # Check permissions on global roles backup file
+    >&2 log 1 'Checking permissions on global roles backup file %s\n' "$1/roles.json"
+
+    if ! test -r "$1/roles.json"
+    then
+        >&2 log 0 '%s: %s: insufficient permissions\n' "${__progname__}" "$1/roles.json"
+        exit 1
+    fi
 }
 
 
 ################
 # Check if a role exists
+#
+# usage: role_exists ROLE_NAME
 ################
 role_exists()
 {
@@ -386,6 +449,8 @@ role_exists()
 
 ################
 # Check if an instance profile exists
+#
+# usage: instance_profile_exists INSTANCE_PROFILE_NAME
 ################
 instance_profile_exists()
 {
@@ -400,6 +465,8 @@ instance_profile_exists()
 
 ################
 # Remove role from instance profile
+#
+# usage: remove_role_from_instance_profiles ROLE_NAME INSTANCE_PROFILE_BACKUP_DIR
 ################
 remove_role_from_instance_profiles()
 {
@@ -472,6 +539,8 @@ remove_role_from_instance_profiles()
 
 ################
 # Detach managed role policies
+#
+# usage: detach_managed_role_policies ROLE_NAME MANAGED_POLICY_BACKUP_DIR
 ################
 detach_managed_role_policies()
 {
@@ -512,6 +581,8 @@ detach_managed_role_policies()
 
 ################
 # Destroy inline role policies
+#
+# usage: delete_inline_role_policies ROLE_NAME INLINE_POLICY_BACKUP_DIR
 ################
 delete_inline_role_policies()
 {
@@ -556,6 +627,8 @@ delete_inline_role_policies()
 
 ################
 # Destroy a role
+#
+# usage: delete_role ROLE_NAME ROLE_BACKUP_DIR
 ################
 delete_role()
 {
@@ -590,6 +663,8 @@ delete_role()
 
 ################
 # Restore instance profiles
+#
+# usage: restore_instance_profiles ROLE_NAME INSTANCE_PROFILE_BACKUP_DIR
 ################
 restore_instance_profiles()
 {
@@ -599,7 +674,8 @@ restore_instance_profiles()
     # Check if instance profile backup directory exists
     if ! test -d "$2"
     then
-        >&2 log 1 '*** No instance profile backup directory %s\n' "$2"
+        >&2 log 1 '*** No instance profile backup directory %s for role %s\n' "$2" "$1"
+        >&4 log 0 'No instance profile backup directory %s for role %s\n' "$2" "$1"
         return 1
     fi
 
@@ -615,6 +691,7 @@ restore_instance_profiles()
 
             if ! instance_profile_exists "${instance_profile_name}"
             then
+                # Create instance profile
                 >&2 log 1 '==> Creating instance profile %s\n' "${instance_profile_name}"
 
                 if "${aws_cmd[@]}" iam create-instance-profile --instance-profile-name "${instance_profile_name}" --cli-input-json "$(< "${data_file}")" > /dev/null
@@ -639,6 +716,7 @@ restore_instance_profiles()
     then
         while read -r -u 3 instance_profile_name
         do
+            # Add role to instance profile
             >&2 log 1 '==> Adding role to instance profile %s\n' "${instance_profile_name}"
 
             if "${aws_cmd[@]}" iam add-role-to-instance-profile --instance-profile-name "${instance_profile_name}" --role-name "$1" > /dev/null
@@ -656,6 +734,8 @@ restore_instance_profiles()
 
 ################
 # Restore managed role policies
+#
+# usage: restore_managed_role_policies ROLE_NAME MANAGED_POLICY_BACKUP_DIR
 ################
 restore_managed_role_policies()
 {
@@ -664,7 +744,8 @@ restore_managed_role_policies()
     # Check if managed policy backup directory exists
     if ! test -d "$2"
     then
-        >&2 log 1 '*** No managed policy backup directory %s\n' "$2"
+        >&2 log 1 '*** No managed policy backup directory %s for role %s\n' "$2" "$1"
+        >&4 log 0 'No managed policy backup directory %s for role %s\n' "$2" "$1"
         return 1
     fi
 
@@ -675,6 +756,7 @@ restore_managed_role_policies()
     then
         while read -r -u 3 policy_arn
         do
+            # Attach managed policy
             >&2 log 1 '==> Attaching managed policy %s\n' "${policy_arn}"
 
             if "${aws_cmd[@]}" iam attach-role-policy --role-name "$1" --policy-arn "${policy_arn}" > /dev/null
@@ -692,6 +774,8 @@ restore_managed_role_policies()
 
 ################
 # Restore inline role policies
+#
+# usage: restore_inline_role_policies ROLE_NAME INLINE_POLICY_BACKUP_DIR
 ################
 restore_inline_role_policies()
 {
@@ -702,7 +786,8 @@ restore_inline_role_policies()
     # Check if inline policy backup directory exists
     if ! test -d "$2"
     then
-        >&2 log 1 '*** No inline policy backup directory %s\n' "$2"
+        >&2 log 1 '*** No inline policy backup directory %s for role %s\n' "$2" "$1"
+        >&4 log 0 'No inline policy backup directory %s for role %s\n' "$2" "$1"
         return 1
     fi
 
@@ -716,8 +801,15 @@ restore_inline_role_policies()
             policy_name="${data_file##*/}"
             policy_name="${policy_name%.json}"
 
-            policy_document="$(jq ".PolicyDocument" < "${data_file}")"
+            # Get policy document from inline policy backup file
+            if ! policy_document="$(jq --exit-status ".PolicyDocument" < "${data_file}")"
+            then
+                >&2 log 1 '*** No attribute PolicyDocument in backup file %s for policy %s of role %s\n' "${data_file}" "${policy_name}" "$1"
+                >&4 log 0 'No attribute PolicyDocument in backup file %s for policy %s of role %s\n' "${data_file}" "${policy_name}" "$1"
+                return 1
+            fi
 
+            # Create inline policy
             >&2 log 1 '==> Creating inline policy %s\n' "${policy_name}"
 
             if "${aws_cmd[@]}" iam put-role-policy --role-name "$1" --policy-name "${policy_name}" --policy-document "${policy_document}" --cli-input-json "$(< "${data_file}")" > /dev/null
@@ -735,6 +827,7 @@ restore_inline_role_policies()
 
 ################
 # Restore a role
+# usage: restore_role ROLE_NAME ROLE_BACKUP_DIR GLOBAL_ROLES_BACKUP_FILE
 ################
 restore_role()
 {
@@ -745,16 +838,23 @@ restore_role()
         # Check if role backup file exists
         if ! test -f "$2/role.json"
         then
-            >&2 log 1 '*** No role backup file %s\n' "$2/role.json"
+            >&2 log 1 '*** No role backup file %s for role %s\n' "$2/role.json" "$1"
+            >&4 log 0 'No role backup file %s for role %s\n\n' "$2/role.json" "$1"
             return 1
         fi
 
-        assume_role_policy_document="$(jq '.[]|select(.RoleName == "'"$1"'").AssumeRolePolicyDocument' < "$3")"
+        # Get trust policy from global roles backup file
+        if ! assume_role_policy_document="$(jq --exit-status --arg role_name "$1" '.[]|select(.RoleName == $role_name).AssumeRolePolicyDocument' < "$3")"
+        then
+            >&2 log 1 '*** No attribute AssumeRolePolicyDocument for role %s in global roles backup file %s\n' "$1" "$3"
+            >&4 log 0 'No attribute AssumeRolePolicyDocument for role %s in global roles backup file %s\n' "$1" "$3"
+            return 1
+        fi
 
         # Create role
         >&2 log 1 '==> Creating role %s\n' "$1"
 
-        if "${aws_cmd[@]}" iam create-role --role-name "$1" --assume-role-policy-document  "${assume_role_policy_document}" --cli-input-json "$(< "$2/role.json")" > /dev/null
+        if "${aws_cmd[@]}" iam create-role --role-name "$1" --assume-role-policy-document "${assume_role_policy_document}" --cli-input-json "$(< "$2/role.json")" > /dev/null
         then
             >&4 log 0 'Created role %s\n' "$1"
         else
@@ -771,28 +871,32 @@ restore_role()
 
 ################
 # Destroy roles read line-by-line from files
+# usage: destroy SOURCE_FILE ...
 ################
 destroy()
 {
     local line=""
+    local line_prev=""
     local role
     local role_path
 
     # Set up backup directory
     if ((backups))
     then
-        create_new_backup_dir
+        create_backup_dir "${backup_dir}"
+        >&2 log 1 '\n'
     fi
 
     # Iterate over all policies
     while
-        if test -n "${line}"
-        then
-            sleep 0.25
-            >&2 echo
-        fi
+        line_prev="${line}"
         read -r -u 3 line
     do
+        if test -n "${line_prev}"
+        then
+            sleep 0.34
+            >&2 echo
+        fi
         >&2 log 1 '> %s\n' "${line}"
 
         case "${line}" in
@@ -896,28 +1000,16 @@ destroy()
 
 ################
 # Restore deleted roles from a backup directory
+# usage: restore SOURCE_DIRECTORY
 ################
 restore()
 {
     local backup_path
     local role=""
 
-    # Check if the backup directory and role list exist
-    if ! test -d "$1"
-    then
-        >&2 log 0 '%s: %s: no such directory\n' "${__progname__}" "$1"
-        exit 1
-    fi
-    if ! test -f "$1/roles.json"
-    then
-        >&2 log 0 '%s: %s: missing required file\n' "${__progname__}" "$1/roles.json"
-        exit 1
-    fi
-    if ! test -r "$1/roles.json"
-    then
-        >&2 log 0 '%s: %s: insufficient permissions\n' "${__progname__}" "$1/roles.json"
-        exit 1
-    fi
+    # Check top-level contents of the backup directory
+    check_backup_dir "$1"
+    >&2 log 1 '\n'
 
     # Iterate over backup subdirectories (i.e. roles)
     for backup_path in "$1"/*/
@@ -926,7 +1018,7 @@ restore()
 
         if test -n "${role}"
         then
-            sleep 0.25
+            sleep 0.34
             >&2 echo
         fi
         >&2 log 1 '> %s\n' "${backup_path}"
@@ -961,6 +1053,8 @@ restore()
 
 ################
 # Parse options and execute role operation
+#
+# usage: main ARGS ...
 ################
 main()
 {
