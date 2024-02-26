@@ -10,7 +10,10 @@ set -e
 
 exec 4>&1
 
-trap '>&2 echo; exit 130' SIGINT
+trap '
+>&2 echo
+exit 130
+' SIGINT
 
 __progname__="${0##*/}"
 
