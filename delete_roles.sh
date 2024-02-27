@@ -971,17 +971,17 @@ destroy()
             fi
             if ! mkdir -- "${backup_dir}/${role}/instance_profiles"
             then
-                >&2 log 0 '* Failed to create instance profile backup directory %s\n' "${__progname__}" "${backup_dir}/instance_profiles"
+                >&2 log 0 '* Failed to create instance profile backup directory %s\n' "${__progname__}" "${backup_dir}/${role}/instance_profiles"
                 continue
             fi
             if ! mkdir -- "${backup_dir}/${role}/managed_policies"
             then
-                >&2 log 0 'Failed to create managed policy backup directory%s \n' "${__progname__}" "${backup_dir}/managed_policies"
+                >&2 log 0 'Failed to create managed policy backup directory%s \n' "${__progname__}" "${backup_dir}/${role}/managed_policies"
                 continue
             fi
             if ! mkdir -- "${backup_dir}/${role}/inline_policies"
             then
-                >&2 log 0 '* Failed to create inline policy backup directory %s\n' "${__progname__}" "${backup_dir}/inline_policies"
+                >&2 log 0 '* Failed to create inline policy backup directory %s\n' "${__progname__}" "${backup_dir}/${role}/inline_policies"
                 continue
             fi
         fi
