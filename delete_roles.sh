@@ -244,7 +244,7 @@ parse_opts()
         >&2 usage
         exit 2
     fi
-    "__parse_opts_${subcommand}" "$@"
+    "parse_opts_${subcommand}" "$@"
 }
 
 
@@ -252,9 +252,9 @@ parse_opts()
 ################
 # Parse ``destroy'' subcommand options.
 #
-# usage: __parse_opts_destroy
+# usage: parse_opts_destroy
 ################
-__parse_opts_destroy()
+parse_opts_destroy()
 {
     local opt=""
 
@@ -306,9 +306,9 @@ __parse_opts_destroy()
 ################
 # Parse ``restore'' subcommand options.
 #
-# usage: __parse_opts_restore
+# usage: parse_opts_restore
 ################
-__parse_opts_restore()
+parse_opts_restore()
 {
     local opt=""
 
