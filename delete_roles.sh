@@ -98,7 +98,7 @@ log()
 ################
 # Confirm yes or no.
 #
-# usage: confirm
+# usage: confirm [PROMPT]
 ################
 confirm()
 {
