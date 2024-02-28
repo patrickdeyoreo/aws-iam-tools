@@ -356,11 +356,11 @@ create_backup_dir()
     # Rename existing backup directory
     if test -d "$1"
     then
-        while test -a "$1.${bkp_num}"
+        while test -e "$1.${bkp_num}"
         do
             bkp_num+=1
         done
-        >&2 log 1 'Renaming existing backup directory %s to %s\n' "$1" "$1.${bkp_num}"
+        >&2 log 1 '* Renaming existing backup directory %s to %s\n' "$1" "$1.${bkp_num}"
 
         if ! mv -- "$1" "$1.${bkp_num}"
         then
@@ -370,7 +370,7 @@ create_backup_dir()
     fi
 
     # Create new backup directory
-    >&2 log 1 'Creating new backup directory %s\n' "$1"
+    >&2 log 1 '* Creating new backup directory %s\n' "$1"
 
     if ! mkdir -p -- "$1"
     then
@@ -379,7 +379,7 @@ create_backup_dir()
     fi
 
     # Back up list of existing roles
-    >&2 log 1 'Backing up list of existing roles to %s\n' "$1/roles.json"
+    >&2 log 1 '* Backing up list of existing roles to %s\n' "$1/roles.json"
 
     if ! "${aws_cmd[@]}" iam list-roles --query 'Roles[*].{RoleName: RoleName, RoleId: RoleId, AssumeRolePolicyDocument: AssumeRolePolicyDocument}' > "$1/roles.json"
     then
@@ -397,7 +397,7 @@ create_backup_dir()
 check_backup_dir()
 {
     # Check for backup directory
-    >&2 log 1 'Checking for backup directory %s\n' "$1"
+    >&2 log 1 '* Checking for backup directory %s\n' "$1"
 
     if ! test -d "$1"
     then
@@ -406,7 +406,7 @@ check_backup_dir()
     fi
 
     # Check permissions on backup directory
-    >&2 log 2 'Checking permissions on backup directory %s\n' "$1"
+    >&2 log 2 '* Checking permissions on backup directory %s\n' "$1"
 
     if ! { test -r "$1" && test -w "$1" && test -x "$1"; }
     then
@@ -415,7 +415,7 @@ check_backup_dir()
     fi
 
     # Check for global roles backup file
-    >&2 log 1 'Checking for global roles backup file %s\n' "$1/roles.json"
+    >&2 log 1 '* Checking for global roles backup file %s\n' "$1/roles.json"
 
     if ! test -f "$1/roles.json"
     then
@@ -424,7 +424,7 @@ check_backup_dir()
     fi
 
     # Check permissions on global roles backup file
-    >&2 log 2 'Checking permissions on global roles backup file %s\n' "$1/roles.json"
+    >&2 log 2 '* Checking permissions on global roles backup file %s\n' "$1/roles.json"
 
     if ! test -r "$1/roles.json"
     then
@@ -687,7 +687,7 @@ restore_instance_profiles()
 
     for data_file in "$2"/*.json
     do
-        if test -a "${data_file}"
+        if test -e "${data_file}"
         then
             instance_profile_name="${data_file##*/}"
             instance_profile_name="${instance_profile_name%.json}"
@@ -715,7 +715,7 @@ restore_instance_profiles()
     # Restore instance profile mappings
     >&2 log 1 '==> Adding role to instance profiles\n'
 
-    if test -a "$2/instance_profiles.txt"
+    if test -e "$2/instance_profiles.txt"
     then
         while read -r -u 3 instance_profile_name
         do
@@ -755,7 +755,7 @@ restore_managed_role_policies()
     # Attach managed policies
     >&2 log 1 '==> Restoring managed policy attachments\n'
 
-    if test -a "$2/managed_policies.txt"
+    if test -e "$2/managed_policies.txt"
     then
         while read -r -u 3 policy_arn
         do
@@ -799,7 +799,7 @@ restore_inline_role_policies()
 
     for data_file in "$2"/*.json
     do
-        if test -a "${data_file}"
+        if test -e "${data_file}"
         then
             policy_name="${data_file##*/}"
             policy_name="${policy_name%.json}"
@@ -889,7 +889,6 @@ destroy()
     if ((backups))
     then
         create_backup_dir "${backup_dir}"
-        >&2 log 1 '\n'
     fi
 
     # Iterate over all policies
@@ -900,10 +899,10 @@ destroy()
         if test -n "${line_prev}"
         then
             sleep 0.34
-            >&2 echo
         fi
-        >&2 log 1 '> %s\n' "${line}"
+        >&2 log 1 '\n> %s\n' "${line}"
 
+        # Parse line
         case "${line}" in
             "")
                 continue
@@ -1010,26 +1009,27 @@ destroy()
 ################
 restore()
 {
-    local backup_path
+    local backup_dir
+    local role_dir
     local role=""
 
     # Check top-level contents of the backup directory
     check_backup_dir "$1"
-    >&2 log 1 '\n'
 
-    # Iterate over backup subdirectories (i.e. roles)
-    for backup_path in "$1"/*/
+    # Get full backup directory path
+    backup_dir="$(cd -- "$1" && pwd -P && printf EOF)"
+    backup_dir="${backup_dir%$'\nEOF'}"
+
+    # Iterate over backup subdirectories (i.e. role directories)
+    while read -r -d '' -u 3 role_dir
     do
-        backup_path="${backup_path%/}"
-
         if test -n "${role}"
         then
             sleep 0.34
-            >&2 echo
         fi
-        >&2 log 1 '> %s\n' "${backup_path}"
+        >&2 log 1 '\n> %s\n' "${role_dir}"
 
-        role="${backup_path##*/}"
+        role="${role_dir##*/}"
 
         if ((dry_run))
         then
@@ -1044,16 +1044,16 @@ restore()
         # Restore role
         >&2 log 0 'Restoring role %s\n' "${role}"
         if
-            restore_role                  "${role}" "${backup_path}" "$1" &&
-            restore_inline_role_policies  "${role}" "${backup_path}/inline_policies" &&
-            restore_managed_role_policies "${role}" "${backup_path}/managed_policies" &&
-            restore_instance_profiles     "${role}" "${backup_path}/instance_profiles"
+            restore_role                  "${role}" "${role_dir}" "${backup_dir}" &&
+            restore_inline_role_policies  "${role}" "${role_dir}/inline_policies" &&
+            restore_managed_role_policies "${role}" "${role_dir}/managed_policies" &&
+            restore_instance_profiles     "${role}" "${role_dir}/instance_profiles"
         then
             >&2 log 0 'Success restoring role %s\n' "${role}"
         else
             >&2 log 0 'Failure restoring role %s\n' "${role}"
         fi
-    done
+    done 3< <(find "${backup_dir}" -mindepth 1 -maxdepth 1 -type d -name '[^.]*' -print0)
 }
 
 
