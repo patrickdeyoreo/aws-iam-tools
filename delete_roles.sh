@@ -1018,7 +1018,7 @@ restore()
 
     # Get full backup directory path
     backup_dir="$(cd -- "$1" && pwd -P && printf EOF)"
-    backup_dir="${backup_dir%$'\nEOF'}"
+    backup_dir="${backup_dir%?EOF}"
 
     # Iterate over backup subdirectories (i.e. role directories)
     while read -r -u 3 -d '' role_dir
