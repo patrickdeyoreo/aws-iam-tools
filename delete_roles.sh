@@ -381,7 +381,7 @@ create_backup_dir()
     # Back up list of existing roles
     >&2 log 1 '* Backing up list of existing roles to %s\n' "$1/roles.json"
 
-    if ! "${aws_cmd[@]}" iam list-roles --query 'Roles[*].{RoleName: RoleName, RoleId: RoleId, AssumeRolePolicyDocument: AssumeRolePolicyDocument}' > "$1/roles.json"
+    if ! "${aws_cmd[@]}" iam list-roles --query 'Roles[*].{RoleName: RoleName, RoleId: RoleId, Arn: Arn, AssumeRolePolicyDocument: AssumeRolePolicyDocument}' > "$1/roles.json"
     then
         >&2 log 0 '%s: %s: failed to back up list of existing roles\n' "${__progname__}" "$1/roles.json"
         exit 1
