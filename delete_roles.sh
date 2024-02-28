@@ -1021,7 +1021,7 @@ restore()
     backup_dir="${backup_dir%$'\nEOF'}"
 
     # Iterate over backup subdirectories (i.e. role directories)
-    while read -r -d '' -u 3 role_dir
+    while read -r -u 3 -d '' role_dir
     do
         if test -n "${role}"
         then
