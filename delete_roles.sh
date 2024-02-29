@@ -843,7 +843,7 @@ restore_role()
         if ! test -f "$2/role.json"
         then
             >&2 log 1 '*** No role backup file %s for role %s\n' "$2/role.json" "$1"
-            >&4 log 0 'No role backup file %s for role %s\n\n' "$2/role.json" "$1"
+            >&4 log 0 'No role backup file %s for role %s\n' "$2/role.json" "$1"
             return 1
         fi
 
