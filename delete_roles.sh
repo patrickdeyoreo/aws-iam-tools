@@ -1009,20 +1009,21 @@ destroy()
 ################
 restore()
 {
-    local backup_dir
     local role_dir
     local role=""
 
     # Check top-level contents of the backup directory
     check_backup_dir "$1"
 
-    # Get full backup directory path
-    backup_dir="$(cd -- "$1" && pwd -P && printf EOF)"
-    backup_dir="${backup_dir%?EOF}"
-
     # Iterate over backup subdirectories (i.e. role directories)
-    while read -r -u 3 -d '' role_dir
+    for role_dir in "$1"/*/
     do
+        if ! test -e "${role_dir}"
+        then
+            continue
+        fi
+        role_dir="${role_dir%/}"
+
         if test -n "${role}"
         then
             sleep 0.34
@@ -1053,7 +1054,7 @@ restore()
         else
             >&2 log 0 'Failure restoring role %s\n' "${role}"
         fi
-    done 3< <(find "${backup_dir}" -mindepth 1 -maxdepth 1 -type d -name '[^.]*' -print0)
+    done
 }
 
 
