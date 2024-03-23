@@ -80,7 +80,7 @@ optional arguments:
 #
 # usage: log LEVEL ARGS...
 ################
-log()
+function log()
 {
     local level
 
@@ -100,7 +100,7 @@ log()
 #
 # usage: confirm [PROMPT]
 ################
-confirm()
+function confirm()
 {
     local response
 
@@ -126,7 +126,7 @@ confirm()
 #
 # usage: is_subcommand SUBCOMMAND
 ################
-is_subcommand()
+function is_subcommand()
 {
     local subcommand
 
@@ -168,7 +168,7 @@ function help()
 #
 # usage: usage [SUBCOMMAND]
 ################
-usage()
+function usage()
 {
     local usage_name=""
 
@@ -190,7 +190,7 @@ usage()
 #
 # usage: parse_opts
 ################
-parse_opts()
+function parse_opts()
 {
     OPTIND=1
 
@@ -229,7 +229,7 @@ parse_opts()
         esac
     done
 
-    if ! (($#))
+    if ! (($# - (OPTIND - 1) >= 1))
     then
         >&2 usage
         exit 2
@@ -254,7 +254,7 @@ parse_opts()
 #
 # usage: parse_opts_destroy
 ################
-parse_opts_destroy()
+function parse_opts_destroy()
 {
     local opt=""
 
@@ -293,9 +293,8 @@ parse_opts_destroy()
                 ;;
         esac
     done
-    shift "$((OPTIND - 1))"
 
-    if ! (($#))
+    if ! (($# - (OPTIND - 1) >= 1))
     then
         >&2 usage destroy
         exit 2
@@ -308,7 +307,7 @@ parse_opts_destroy()
 #
 # usage: parse_opts_restore
 ################
-parse_opts_restore()
+function parse_opts_restore()
 {
     local opt=""
 
@@ -334,9 +333,8 @@ parse_opts_restore()
                 ;;
         esac
     done
-    shift "$((OPTIND - 1))"
 
-    if ! (($# == 1))
+    if ! (($# - (OPTIND - 1) == 1))
     then
         >&2 usage restore
         exit 2
@@ -349,7 +347,7 @@ parse_opts_restore()
 #
 # usage: create_backup_dir DIRECTORY
 ################
-create_backup_dir()
+function create_backup_dir()
 {
     local -i bkp_num=1
 
@@ -394,7 +392,7 @@ create_backup_dir()
 #
 # usage: check_backup_dir DIRECTORY
 ################
-check_backup_dir()
+function check_backup_dir()
 {
     # Check for backup directory
     >&2 log 1 '* Checking for backup directory %s\n' "$1"
@@ -439,7 +437,7 @@ check_backup_dir()
 #
 # usage: role_exists ROLE_NAME
 ################
-role_exists()
+function role_exists()
 {
     >&2 log 1 '==> Checking if role %s exists\n' "$1"
 
@@ -455,7 +453,7 @@ role_exists()
 #
 # usage: instance_profile_exists INSTANCE_PROFILE_NAME
 ################
-instance_profile_exists()
+function instance_profile_exists()
 {
     >&2 log 1 '==> Checking if instance profile %s exists\n' "$1"
 
@@ -471,7 +469,7 @@ instance_profile_exists()
 #
 # usage: remove_role_from_instance_profiles ROLE_NAME INSTANCE_PROFILE_BACKUP_DIR
 ################
-remove_role_from_instance_profiles()
+function remove_role_from_instance_profiles()
 {
     local instance_profile
 
@@ -545,7 +543,7 @@ remove_role_from_instance_profiles()
 #
 # usage: detach_managed_role_policies ROLE_NAME MANAGED_POLICY_BACKUP_DIR
 ################
-detach_managed_role_policies()
+function detach_managed_role_policies()
 {
     local policy
 
@@ -587,7 +585,7 @@ detach_managed_role_policies()
 #
 # usage: delete_inline_role_policies ROLE_NAME INLINE_POLICY_BACKUP_DIR
 ################
-delete_inline_role_policies()
+function delete_inline_role_policies()
 {
     local policy
 
@@ -633,7 +631,7 @@ delete_inline_role_policies()
 #
 # usage: delete_role ROLE_NAME ROLE_BACKUP_DIR
 ################
-delete_role()
+function delete_role()
 {
     # Backup role
     if ((backups))
@@ -669,7 +667,7 @@ delete_role()
 #
 # usage: restore_instance_profiles ROLE_NAME INSTANCE_PROFILE_BACKUP_DIR
 ################
-restore_instance_profiles()
+function restore_instance_profiles()
 {
     local data_file
     local instance_profile_name
@@ -740,7 +738,7 @@ restore_instance_profiles()
 #
 # usage: restore_managed_role_policies ROLE_NAME MANAGED_POLICY_BACKUP_DIR
 ################
-restore_managed_role_policies()
+function restore_managed_role_policies()
 {
     local policy_arn
 
@@ -780,7 +778,7 @@ restore_managed_role_policies()
 #
 # usage: restore_inline_role_policies ROLE_NAME INLINE_POLICY_BACKUP_DIR
 ################
-restore_inline_role_policies()
+function restore_inline_role_policies()
 {
     local data_file
     local policy_name
@@ -833,7 +831,7 @@ restore_inline_role_policies()
 #
 # usage: restore_role ROLE_NAME ROLE_BACKUP_DIR BACKUP_ROOT
 ################
-restore_role()
+function restore_role()
 {
     local assume_role_policy_document
 
@@ -878,7 +876,7 @@ restore_role()
 #
 # usage: destroy SOURCE_FILE ...
 ################
-destroy()
+function destroy()
 {
     local line=""
     local line_prev=""
@@ -1007,7 +1005,7 @@ destroy()
 #
 # usage: restore SOURCE_DIRECTORY
 ################
-restore()
+function restore()
 {
     local role_dir
     local role=""
@@ -1063,7 +1061,7 @@ restore()
 #
 # usage: main ARGS ...
 ################
-main()
+function main()
 {
     local aws_cmd=("aws" "--output" "json")
     local -i backups=0
